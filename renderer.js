@@ -304,9 +304,11 @@ function loadMembers(roomId) {
   if (!room) return;
 
   const members = room.getJoinedMembers();
-  
-  memberCount.textContent = `${members.length} ${members.length === 1 ? 'member' : 'members'}`;
-  
+
+  const membersHeader = document.querySelector('.members-header p');
+  if (membersHeader) {
+    membersHeader.textContent = `${members.length} Members`;
+  }  
   membersSidebar.style.display = 'flex';
   
   membersList.innerHTML = '';
