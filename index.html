@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>didi client</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="login-screen" class="screen active">
+      <div class="login-container">
+        <h1>Welcome to didi</h1>
+        
+        <form id="login-form">
+          <div class="form-group">
+            <label for="homeserver">homeserver</label>
+            <input 
+              type="text" 
+              id="homeserver" 
+              placeholder="https://matrix.didi.party/" 
+              value="https://matrix.didi.party/"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="username">username</label>
+            <input 
+              type="text" 
+              id="username" 
+              placeholder="@username:matrix.didi.party" 
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="password">password</label>
+            <input 
+              type="password" 
+              id="password" 
+              placeholder="password" 
+              required
+            >
+          </div>
+
+          <button type="submit" class="btn btn-primary">login</button>
+        </form>
+
+        <div id="login-status" class="status-message"></div>
+      </div>
+    </div>
+
+    <div id="chat-screen" class="screen">
+      <div class="chat-container">
+        <div class="sidebar">
+          <div class="sidebar-header">
+            <p>rooms</p>
+            <button id="logout-btn" class="btn btn-small">logout</button>
+          </div>
+          <div class="user-info" id="user-info"></div>
+          <div id="rooms-list" class="rooms-list">
+            <p class="loading">loading rooms..</p>
+          </div>
+        </div>
+
+        <div class="main-content">
+          <div class="chat-header" id="chat-header">
+            <h2 id="current-room-name">select room</h2>
+            <div id="member-count" class="member-count"></div>
+          </div>
+          
+          <div class="messages-container" id="messages-container">
+            <div class="empty-state">
+              <p>no room selected</p>
+            </div>
+          </div>
+
+          <div class="message-input-container" id="message-input-container" style="display: none;">
+            <form id="message-form">
+              <input 
+                type="text" 
+                id="message-input" 
+                placeholder="Message #general" 
+                autocomplete="off"
+              >
+              <button type="submit" class="btn btn-primary" style="display: none;">Send</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="members-sidebar" id="members-sidebar" style="display: none;">
+          <div class="members-header">
+            <p>members</p>
+            <button id="toggle-members" class="btn btn-small">hide</button>
+          </div>
+          <div class="members-list" id="members-list">
+            <p class="loading">loading members..</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
