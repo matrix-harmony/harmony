@@ -1,0 +1,2 @@
+# harmony
+a matrix client based on the look of classic discord and inspired by didi.party homeserver
