@@ -559,7 +559,6 @@ body {
   display: block;
 }
 
-/* Responsive adjustments */
 @media (max-width: 1000px) {
   .members-sidebar {
     width: 200px;
@@ -576,7 +575,6 @@ body {
   }
 }
 
-/* Scrollbar Styling - Discord style */
 ::-webkit-scrollbar {
   width: 16px;
 }
