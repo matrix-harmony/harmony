@@ -192,7 +192,6 @@ body {
 }
 
 .user-info::before {
-  content: "👤";
   font-size: 16px;
 }
 
@@ -301,7 +300,6 @@ body {
 }
 
 .member-count::before {
-  content: "👥";
   font-size: 14px;
 }
 
