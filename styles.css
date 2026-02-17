@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -5,7 +7,7 @@
 }
 
 body {
-  font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: 'Rubik', sans-serif;
   background: #36393f;
   color: #dcddde;
   height: 100vh;
@@ -176,7 +178,7 @@ body {
 .sidebar-header h2 {
   color: #fff;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   flex: 1;
 }
 
@@ -215,8 +217,8 @@ body {
 
 .user-name {
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -267,8 +269,8 @@ body {
 }
 
 .room-item {
-  padding: 6px 8px;
-  margin: 1px 8px;
+  padding: 5px 8px;
+  margin: 0px 8px;
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.17s ease;
@@ -297,9 +299,9 @@ body {
 }
 
 .room-name {
-  font-weight: 500;
+  font-weight: 300;
   color: #96989d;
-  font-size: 16px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -342,7 +344,7 @@ body {
 .chat-header h2 {
   color: #fff;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 300;
   margin: 0;
   display: flex;
   align-items: center;
@@ -418,7 +420,7 @@ body {
 }
 
 .message-sender {
-  font-weight: 500;
+  font-weight: 300;
   color: #fff;
   margin-right: 8px;
   cursor: pointer;
@@ -576,7 +578,7 @@ body {
 .member-name {
   color: #b9bbbe;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 300;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
