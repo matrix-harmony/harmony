@@ -21,3 +21,4 @@ Todo:
 - Browser/Mac/Linux
 - Settings
 - Themes (Dark mode, AMOLED Dark Mode, modern discord burple)
+- Ability to put didi.party or matrix.org in the homeserver field instead of syping the address where its from (using well-known delegation)
