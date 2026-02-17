@@ -19,3 +19,4 @@ Todo:
 - Threads
 - Multi accounds/account switching
 - Browser/Mac/Linux
+- Settings
