@@ -477,7 +477,6 @@ function createMemberElement(member) {
     memberDiv.classList.add('online');
   }
 
-  // Get member avatar
   const memberAvatarMxc = member.getMxcAvatarUrl();
   const memberAvatarUrl = mxcToUrl(memberAvatarMxc);
 
