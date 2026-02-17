@@ -20,3 +20,4 @@ Todo:
 - Multi accounds/account switching
 - Browser/Mac/Linux
 - Settings
+- Themes (Dark mode, AMOLED Dark Mode, modern discord burple)
