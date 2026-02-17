@@ -2,6 +2,8 @@ const sdk = require('matrix-js-sdk');
 
 let matrixClient = null;
 let currentRoomId = null;
+let currentSpaceId = null;
+let currentHomeView = 'dms';
 
 const loginScreen = document.getElementById('login-screen');
 const chatScreen = document.getElementById('chat-screen');
@@ -34,7 +36,6 @@ function mxcToUrl(mxcUrl) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('Checking for saved session...');
   const savedToken = localStorage.getItem('matrix_access_token');
   const savedUserId = localStorage.getItem('matrix_user_id');
   const savedHomeserver = localStorage.getItem('matrix_homeserver');
@@ -54,12 +55,9 @@ async function autoLogin(homeserver, accessToken, userId) {
       accessToken: accessToken,
       userId: userId
     });
-
     await startMatrixClient();
-
     loginScreen.classList.remove('active');
     chatScreen.classList.add('active');
-
     console.log('Auto-login successful!');
   } catch (error) {
     console.error('Auto-login failed:', error);
@@ -109,7 +107,6 @@ loginForm.addEventListener('submit', async (e) => {
     });
 
     await startMatrixClient();
-
     loginScreen.classList.remove('active');
     chatScreen.classList.add('active');
 
@@ -156,8 +153,10 @@ async function startMatrixClient() {
           userAvatarElement.style.padding = '0';
         }
       }
-      console.log('Sync Complete! Loading Rooms...');
-      loadRooms();
+      console.log('Sync Complete! Loading...');
+      loadSpaces();
+      showHomeNav(true);
+      loadHomeView();
     }
   });
 
@@ -191,38 +190,215 @@ async function performLogout() {
   }
 }
 
-function loadRooms() {
+function showHomeNav(visible) {
+  const homeNav = document.getElementById('home-nav');
+  if (homeNav) homeNav.classList.toggle('visible', visible);
+}
+
+document.getElementById('nav-dms')?.addEventListener('click', () => {
+  currentHomeView = 'dms';
+  document.querySelectorAll('.home-nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-dms').classList.add('active');
+  loadHomeView();
+});
+
+document.getElementById('nav-rooms')?.addEventListener('click', () => {
+  currentHomeView = 'rooms';
+  document.querySelectorAll('.home-nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-rooms').classList.add('active');
+  loadHomeView();
+});
+
+function loadHomeView() {
+  if (!matrixClient) return;
+
   const rooms = matrixClient.getRooms();
-  
-  if (rooms.length === 0) {
-    roomsList.innerHTML = '<p class="loading">no rooms found</p>';
+
+  const allHomeRooms = rooms.filter(room => {
+    if (room.isSpaceRoom()) return false;
+    const parentEvents = room.currentState.getStateEvents('m.space.parent');
+    return !parentEvents || parentEvents.length === 0;
+  });
+
+  const dmEvent = matrixClient.getAccountData('m.direct');
+  const dmData = dmEvent?.getContent() || {};
+  const allDmRoomIds = Object.values(dmData).flat();
+
+  roomsList.innerHTML = '';
+
+  if (currentHomeView === 'dms') {
+    const dmRooms = allHomeRooms.filter(room => allDmRoomIds.includes(room.roomId));
+
+    if (dmRooms.length === 0) {
+      roomsList.innerHTML = '<p class="loading">No direct messages</p>';
+      return;
+    }
+
+    dmRooms.sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp());
+    dmRooms.forEach(room => roomsList.appendChild(createRoomElement(room, true)));
+
+  } else {
+    const nonDmRooms = allHomeRooms.filter(room => !allDmRoomIds.includes(room.roomId));
+
+    const globalRooms = nonDmRooms.filter(room => {
+      const joinRule = room.currentState.getStateEvents('m.room.join_rules', '')?.getContent()?.join_rule;
+      return joinRule === 'public';
+    });
+
+    const regularRooms = nonDmRooms.filter(room => {
+      const joinRule = room.currentState.getStateEvents('m.room.join_rules', '')?.getContent()?.join_rule;
+      return joinRule !== 'public';
+    });
+
+    if (nonDmRooms.length === 0) {
+      roomsList.innerHTML = '<p class="loading">No rooms</p>';
+      return;
+    }
+
+    if (regularRooms.length > 0) {
+      const header = document.createElement('div');
+      header.className = 'room-category';
+      header.textContent = 'Rooms';
+      roomsList.appendChild(header);
+      regularRooms.sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp());
+      regularRooms.forEach(room => roomsList.appendChild(createRoomElement(room)));
+    }
+
+    if (globalRooms.length > 0) {
+      const header = document.createElement('div');
+      header.className = 'room-category';
+      header.textContent = 'Global Rooms';
+      roomsList.appendChild(header);
+      globalRooms.sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp());
+      globalRooms.forEach(room => roomsList.appendChild(createRoomElement(room)));
+    }
+  }
+}
+
+function loadSpaces() {
+  const spacesList = document.getElementById('spaces-list');
+  if (!spacesList) return;
+
+  spacesList.innerHTML = '';
+
+  const rooms = matrixClient.getRooms();
+  const spaces = rooms.filter(room => room.isSpaceRoom());
+
+  if (spaces.length === 0) return;
+
+  spaces.forEach(space => spacesList.appendChild(createSpaceIcon(space)));
+}
+
+function createSpaceIcon(space) {
+  const icon = document.createElement('div');
+  icon.className = 'server-icon';
+  icon.title = space.name || 'Unnamed Space';
+  icon.dataset.spaceId = space.roomId;
+
+  const avatarMxc = space.getMxcAvatarUrl ? space.getMxcAvatarUrl() : null;
+  const avatarUrl = mxcToUrl(avatarMxc);
+
+  if (avatarUrl) {
+    icon.innerHTML = `<img src="${avatarUrl}" alt="${escapeHtml(space.name || '?')}"
+                          onerror="this.parentElement.textContent='${(space.name || '?').charAt(0).toUpperCase()}'">`;
+  } else {
+    icon.textContent = (space.name || '?').charAt(0).toUpperCase();
+  }
+
+  icon.addEventListener('click', () => switchSpace(space.roomId));
+  return icon;
+}
+
+function switchSpace(spaceId) {
+  currentSpaceId = spaceId;
+  showHomeNav(false);
+
+  document.querySelectorAll('.server-icon').forEach(i => i.classList.remove('active'));
+  document.querySelector(`[data-space-id="${spaceId}"]`)?.classList.add('active');
+  document.getElementById('home-server')?.classList.remove('active');
+
+  const space = matrixClient.getRoom(spaceId);
+  const sidebarHeader = document.querySelector('.sidebar-header h2');
+  if (sidebarHeader) sidebarHeader.textContent = space?.name || 'Space';
+
+  loadRoomsForSpace(spaceId);
+}
+
+function loadRoomsForSpace(spaceId) {
+  const allRooms = matrixClient.getRooms();
+  const spaceRoom = matrixClient.getRoom(spaceId);
+
+  const childEvents = spaceRoom?.currentState.getStateEvents('m.space.child') || [];
+  const spaceChildIds = new Set(childEvents.map(e => e.getStateKey()).filter(Boolean));
+
+  const spaceRooms = allRooms.filter(room => {
+    if (room.isSpaceRoom()) return false;
+    if (spaceChildIds.has(room.roomId)) return true;
+    const localId = room.roomId.split(':')[0];
+    if (spaceChildIds.has(localId)) return true;
+    const parentEvents = room.currentState.getStateEvents('m.space.parent') || [];
+    if (parentEvents.some(e => e.getStateKey() === spaceId)) return true;
+
+    return false;
+  });
+
+  roomsList.innerHTML = '';
+
+  if (spaceRooms.length === 0) {
+    roomsList.innerHTML = '<p class="loading">No rooms</p>';
     return;
   }
 
-  rooms.sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp());
-
-  roomsList.innerHTML = '';
-  rooms.forEach(room => {
-    roomsList.appendChild(createRoomElement(room));
-  });
+  spaceRooms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  spaceRooms.forEach(room => roomsList.appendChild(createRoomElement(room)));
 }
 
-function createRoomElement(room) {
+document.getElementById('home-server')?.addEventListener('click', () => {
+  currentSpaceId = null;
+  document.querySelectorAll('.server-icon').forEach(i => i.classList.remove('active'));
+  document.getElementById('home-server')?.classList.add('active');
+  const sidebarHeader = document.querySelector('.sidebar-header h2');
+  if (sidebarHeader) sidebarHeader.textContent = 'Home';
+  showHomeNav(true);
+  loadHomeView();
+});
+
+function createRoomElement(room, isDm = false) {
   const roomDiv = document.createElement('div');
   roomDiv.className = 'room-item';
   roomDiv.dataset.roomId = room.roomId;
 
-  const roomName = room.name || 'Unnamed Room';
+  if (isDm) {
+    const members = room.getJoinedMembers();
+    const otherMember = members.find(m => m.userId !== matrixClient.getUserId()) || members[0];
+    const displayName = otherMember?.name || room.name || '?';
+    const avatarLetter = displayName.charAt(0).toUpperCase();
+    const avatarMxc = otherMember?.getMxcAvatarUrl()
+      || matrixClient.getUser(otherMember?.userId)?.avatarUrl;
+    const avatarUrl = mxcToUrl(avatarMxc);
 
-  roomDiv.innerHTML = `<div class="room-name">${escapeHtml(roomName)}</div>`;
+    const avatarHtml = avatarUrl
+      ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+              onerror="this.style.display='none';this.nextSibling.style.display='flex';">
+         <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-weight:600;">${avatarLetter}</div>`
+      : avatarLetter;
+
+    roomDiv.innerHTML = `
+      <div class="dm-avatar">${avatarHtml}</div>
+      <div class="room-name">${escapeHtml(room.name || displayName)}</div>
+    `;
+  } else {
+    roomDiv.innerHTML = `<div class="room-name">${escapeHtml(room.name || 'Unnamed Room')}</div>`;
+  }
+
   roomDiv.addEventListener('click', () => openRoom(room.roomId));
-
   return roomDiv;
 }
 
 function handleNewRoom(room) {
   console.log('New Room Joined:', room.roomId);
-  loadRooms(); 
+  if (!currentSpaceId) loadHomeView();
+  loadSpaces();
 }
 
 function openRoom(roomId) {
@@ -260,7 +436,6 @@ function loadMessages(roomId) {
 
   scrollToBottom();
 }
-
 function createMessageElement(event) {
   const messageDiv = document.createElement('div');
   messageDiv.className = 'message';
@@ -439,7 +614,6 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
-
 toggleMembersBtn.addEventListener('click', () => {
   const isVisible = membersSidebar.style.display !== 'none';
   membersSidebar.style.display = isVisible ? 'none' : 'flex';

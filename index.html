@@ -53,9 +53,33 @@
 
     <div id="chat-screen" class="screen">
       <div class="chat-container">
+        <div class="servers-bar">
+          <div class="server-icon home-icon active" id="home-server" title="Home">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+          </div>
+          <div class="server-divider"></div>
+          <div id="spaces-list"></div>
+        </div>
+
         <div class="sidebar">
           <div class="sidebar-header">
-            <h2>Rooms</h2>
+            <h2>Home</h2>
+          </div>
+          <div class="home-nav" id="home-nav">
+            <button class="home-nav-btn active" id="nav-dms" data-view="dms">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+              </svg>
+              Direct Messages
+            </button>
+            <button class="home-nav-btn" id="nav-rooms" data-view="rooms">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+              </svg>
+              Rooms
+            </button>
           </div>
           <div id="rooms-list" class="rooms-list">
             <p class="loading">Loading Rooms..</p>
