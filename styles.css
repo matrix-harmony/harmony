@@ -181,14 +181,79 @@ body {
 }
 
 .user-info {
-  padding: 8px;
+  padding: 10px;
   background: #292b2f;
-  color: #b9bbbe;
-  font-size: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: auto;
+  height: 52px;
+  border-top: 1px solid #202225;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #5865f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.user-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+}
+
+.user-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-tag {
+  color: #72767d;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-settings-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #b9bbbe;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.user-settings-btn:hover {
+  background: #3c3f45;
+  color: #dcddde;
+}
+
+.user-settings-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .user-info::before {

@@ -70,9 +70,45 @@ function showStatus(message, type) {
 async function startMatrixClient() {
   console.log('starting client...');
 
-  const userId = matrixClient.getUserId();
-  userInfo.textContent = `logged in as ${userId}`;
+const userId = matrixClient.getUserId();
+const userName = userId.split(':')[0].substring(1);
 
+const userNameElement = document.getElementById('user-name');
+const userTagElement = document.getElementById('user-tag');
+const userAvatarElement = document.getElementById('user-avatar');
+const userSettingsBtn = document.getElementById('user-settings-btn');
+
+if (userNameElement) {
+  userNameElement.textContent = userName;
+}
+
+if (userTagElement) {
+  userTagElement.textContent = userId;
+}
+
+if (userAvatarElement) {
+  userAvatarElement.textContent = userName.charAt(0).toUpperCase();
+}
+
+if (userSettingsBtn) {
+  userSettingsBtn.addEventListener('click', async () => {
+    if (confirm('Logout?')) {
+      try {
+        await matrixClient.logout();
+        matrixClient.stopClient();
+        matrixClient = null;
+        
+        chatScreen.classList.remove('active');
+        loginScreen.classList.add('active');
+        
+        document.getElementById('password').value = '';
+        loginStatus.style.display = 'none';
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    }
+  });
+}
   matrixClient.on('Room.timeline', handleNewMessage);
   matrixClient.on('Room', handleNewRoom);
 
