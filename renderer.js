@@ -20,6 +20,55 @@ const membersSidebar = document.getElementById('members-sidebar');
 const memberCount = document.getElementById('member-count');
 const toggleMembersBtn = document.getElementById('toggle-members');
 
+window.addEventListener('DOMContentLoaded', () => {
+  console.log('Checking for saved session...');
+  const savedToken = localStorage.getItem('matrix_access_token');
+  const savedUserId = localStorage.getItem('matrix_user_id');
+  const savedHomeserver = localStorage.getItem('matrix_homeserver');
+
+  if (savedToken && savedUserId && savedHomeserver) {
+    console.log('Found saved session, attempting auto-login...');
+    autoLogin(savedHomeserver, savedToken, savedUserId);
+  } else {
+    console.log('No saved session found');
+  }
+});
+
+async function autoLogin(homeserver, accessToken, userId) {
+  try {
+    matrixClient = sdk.createClient({
+      baseUrl: homeserver,
+      accessToken: accessToken,
+      userId: userId
+    });
+
+    await startMatrixClient();
+
+    loginScreen.classList.remove('active');
+    chatScreen.classList.add('active');
+
+    console.log('Auto-login successful!');
+  } catch (error) {
+    console.error('Auto-login failed:', error);
+    clearSession();
+    loginScreen.classList.add('active');
+  }
+}
+
+function saveSession(homeserver, accessToken, userId) {
+  localStorage.setItem('matrix_access_token', accessToken);
+  localStorage.setItem('matrix_user_id', userId);
+  localStorage.setItem('matrix_homeserver', homeserver);
+  console.log('Session saved to localStorage');
+}
+
+function clearSession() {
+  localStorage.removeItem('matrix_access_token');
+  localStorage.removeItem('matrix_user_id');
+  localStorage.removeItem('matrix_homeserver');
+  console.log('Session cleared from localStorage');
+}
+
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   
@@ -44,6 +93,8 @@ loginForm.addEventListener('submit', async (e) => {
 
     console.log('Login successful!', response);
 
+    saveSession(homeserver, response.access_token, response.user_id);
+
     matrixClient = sdk.createClient({
       baseUrl: homeserver,
       accessToken: response.access_token,
@@ -62,53 +113,44 @@ loginForm.addEventListener('submit', async (e) => {
     submitBtn.textContent = 'Login';
   }
 });
+
 function showStatus(message, type) {
   loginStatus.textContent = message;
   loginStatus.className = `status-message ${type}`;
   loginStatus.style.display = 'block';
 }
+
 async function startMatrixClient() {
-  console.log('Starting Haramony...');
+  console.log('Starting Harmony...');
 
-const userId = matrixClient.getUserId();
-const userName = userId.split(':')[0].substring(1);
+  const userId = matrixClient.getUserId();
+  const userName = userId.split(':')[0].substring(1);
 
-const userNameElement = document.getElementById('user-name');
-const userTagElement = document.getElementById('user-tag');
-const userAvatarElement = document.getElementById('user-avatar');
-const userSettingsBtn = document.getElementById('user-settings-btn');
+  const userNameElement = document.getElementById('user-name');
+  const userTagElement = document.getElementById('user-tag');
+  const userAvatarElement = document.getElementById('user-avatar');
+  const userSettingsBtn = document.getElementById('user-settings-btn');
 
-if (userNameElement) {
-  userNameElement.textContent = userName;
-}
+  if (userNameElement) {
+    userNameElement.textContent = userName;
+  }
 
-if (userTagElement) {
-  userTagElement.textContent = userId;
-}
+  if (userTagElement) {
+    userTagElement.textContent = userId;
+  }
 
-if (userAvatarElement) {
-  userAvatarElement.textContent = userName.charAt(0).toUpperCase();
-}
+  if (userAvatarElement) {
+    userAvatarElement.textContent = userName.charAt(0).toUpperCase();
+  }
 
-if (userSettingsBtn) {
-  userSettingsBtn.addEventListener('click', async () => {
-    if (confirm('Logout?')) {
-      try {
-        await matrixClient.logout();
-        matrixClient.stopClient();
-        matrixClient = null;
-        
-        chatScreen.classList.remove('active');
-        loginScreen.classList.add('active');
-        
-        document.getElementById('password').value = '';
-        loginStatus.style.display = 'none';
-      } catch (error) {
-        console.error('Logout error:', error);
+  if (userSettingsBtn) {
+    userSettingsBtn.addEventListener('click', async () => {
+      if (confirm('Logout?')) {
+        await performLogout();
       }
-    }
-  });
-}
+    });
+  }
+
   matrixClient.on('Room.timeline', handleNewMessage);
   matrixClient.on('Room', handleNewRoom);
 
@@ -120,6 +162,26 @@ if (userSettingsBtn) {
       loadRooms();
     }
   });
+}
+
+async function performLogout() {
+  try {
+    await matrixClient.logout();
+    matrixClient.stopClient();
+    matrixClient = null;
+    
+    // Clear saved session
+    clearSession();
+    
+    chatScreen.classList.remove('active');
+    loginScreen.classList.add('active');
+    
+    document.getElementById('password').value = '';
+    loginStatus.style.display = 'none';
+  } catch (error) {
+    console.error('Logout error:', error);
+    alert('Logout failed: ' + error.message);
+  }
 }
 
 function loadRooms() {
@@ -182,7 +244,6 @@ function handleNewRoom(room) {
   loadRooms(); 
 }
 
-
 function openRoom(roomId) {
   currentRoomId = roomId;
   const room = matrixClient.getRoom(roomId);
@@ -240,20 +301,138 @@ function createMessageElement(event) {
   });
 
   const senderName = getSenderDisplayName(sender);
-  
   const avatarLetter = senderName.charAt(0).toUpperCase();
   messageDiv.setAttribute('data-avatar', avatarLetter);
+
+  let messageContent = '';
+  
+if (content.msgtype === 'm.image') {
+  try {
+    const mxcUrl = content.url;
+    const [, serverAndMedia] = mxcUrl.split('mxc://');
+    const [server, mediaId] = serverAndMedia.split('/');
+    const homeserver = matrixClient.getHomeserverUrl();
+    const accessToken = matrixClient.getAccessToken();
+    const imageUrl = `${homeserver}/_matrix/client/v1/media/download/${server}/${mediaId}?access_token=${accessToken}`;
+    
+    console.log('Image URL:', imageUrl);
+    
+    messageContent = `
+      <div class="message-image-container">
+        <img src="${imageUrl}" 
+             alt="${escapeHtml(content.body || 'Image')}" 
+             class="message-image"
+             loading="lazy" />
+      </div>
+    `;
+  } catch (error) {
+    console.error('Error:', error);
+    messageContent = `<div class="message-content">[Image]</div>`;
+  }
+} else {
+    // Regular text message
+    messageContent = `<div class="message-content">${escapeHtml(content.body || '')}</div>`;
+  }
 
   messageDiv.innerHTML = `
     <div class="message-header">
       <span class="message-sender">${escapeHtml(senderName)}</span>
       <span class="message-time">${timeString}</span>
     </div>
-    <div class="message-content">${escapeHtml(content.body)}</div>
+    ${messageContent}
   `;
 
   return messageDiv;
 }
+
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('message-image')) {
+    e.preventDefault();
+    
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      cursor: pointer;
+    `;
+    
+    const img = document.createElement('img');
+    img.src = e.target.src;
+    img.style.cssText = 'max-width: 90%; max-height: 90%; object-fit: contain;';
+    
+    overlay.appendChild(img);
+    overlay.addEventListener('click', () => overlay.remove());
+    
+    document.body.appendChild(overlay);
+  }
+});
+
+const attachBtn = document.getElementById('attach-btn');
+const fileInput = document.getElementById('file-input');
+
+attachBtn.addEventListener('click', () => {
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file || !currentRoomId) return;
+
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file');
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Image too large. Max size is 10MB');
+    return;
+  }
+
+  try {
+    console.log('Uploading image:', file.name);
+
+    const statusMsg = document.createElement('div');
+    statusMsg.className = 'upload-status';
+    statusMsg.textContent = `Uploading ${file.name}...`;
+    messagesContainer.appendChild(statusMsg);
+    scrollToBottom();
+    const uploadResponse = await matrixClient.uploadContent(file, {
+      name: file.name,
+      type: file.type,
+      onlyContentUri: false
+    });
+
+    console.log('Upload response:', uploadResponse);
+    const mxcUrl = uploadResponse.content_uri;
+
+    await matrixClient.sendMessage(currentRoomId, {
+      msgtype: 'm.image',
+      body: file.name,
+      url: mxcUrl,
+      info: {
+        mimetype: file.type,
+        size: file.size
+      }
+    });
+    statusMsg.remove();
+    fileInput.value = '';
+
+    console.log('Image sent successfully!');
+
+  } catch (error) {
+    console.error('Failed to send image:', error);
+    alert('Failed to send image: ' + error.message);
+    fileInput.value = '';
+  }
+});
 
 function getSenderDisplayName(userId) {
   if (!currentRoomId) return userId;
@@ -297,27 +476,11 @@ messageForm.addEventListener('submit', async (e) => {
   }
 });
 
-
 logoutBtn.addEventListener('click', async () => {
   if (confirm('leaving so soon?')) {
-    try {
-      await matrixClient.logout();
-      matrixClient.stopClient();
-      matrixClient = null;
-      
-      chatScreen.classList.remove('active');
-      loginScreen.classList.add('active');
-      
-      document.getElementById('password').value = '';
-      loginStatus.style.display = 'none';
-      
-    } catch (error) {
-      console.error('Logout error:', error);
-      alert('Logout failed: ' + error.message);
-    }
+    await performLogout();
   }
 });
-
 
 function scrollToBottom() {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;

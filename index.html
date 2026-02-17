@@ -74,7 +74,7 @@
           </div>
         </div>
 
-        <div class="main-content">
+<div class="main-content">
           <div class="chat-header" id="chat-header">
             <h2 id="current-room-name">Select Room</h2>
             <div id="member-count" class="member-count"></div>
@@ -88,12 +88,13 @@
 
           <div class="message-input-container" id="message-input-container" style="display: none;">
             <form id="message-form">
-              <input 
-                type="text" 
-                id="message-input" 
-                placeholder="Message #general" 
-                autocomplete="off"
-              >
+              <button type="button" id="attach-btn" class="attach-btn" title="Attach Image">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                </svg>
+              </button>
+              <input type="text" id="message-input" placeholder="Message #general" autocomplete="off">
+              <input type="file" id="file-input" accept="image/*" style="display: none;">
               <button type="submit" class="btn btn-primary" style="display: none;">Send</button>
             </form>
           </div>
