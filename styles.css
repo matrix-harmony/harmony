@@ -167,8 +167,7 @@ body {
 .sidebar-header {
   padding: 12px 16px;
   background: #2f3136;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
-  box-shadow: 0 1px 0 rgba(4, 4, 5, 0.2), 0 1.5px 0 rgba(6, 6, 7, 0.05), 0 2px 0 rgba(4, 4, 5, 0.05);
+  border-bottom: 1px solid #272727;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -177,8 +176,8 @@ body {
 
 .sidebar-header h2 {
   color: #fff;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 400;
   flex: 1;
 }
 
@@ -333,8 +332,7 @@ body {
 .chat-header {
   padding: 0 16px;
   background: #36393f;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
-  box-shadow: 0 1px 0 rgba(4, 4, 5, 0.2), 0 1.5px 0 rgba(6, 6, 7, 0.05), 0 2px 0 rgba(4, 4, 5, 0.05);
+  border-bottom: 1px solid #2f2f2f;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -517,7 +515,7 @@ body {
 
 .members-header {
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid #272727;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -537,6 +535,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 16px 8px;
+  border-left: 1px solid #2f2f2f;
 }
 
 .member-item {
@@ -647,12 +646,12 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #2e3338;
+  background: #36393f;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #202225;
-  border: 4px solid #2e3338;
+  border: 4px solid #36393f;
   border-radius: 8px;
 }
 

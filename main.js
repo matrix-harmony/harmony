@@ -14,8 +14,9 @@ function createWindow() {
       contextIsolation: false,
       enableRemoteModule: true
     },
-    title: 'Matrix Client',
-    resizable: true
+    title: 'Harmony',
+    resizable: true,
+    autoHideMenuBar: true,
   });
 
   mainWindow.loadFile('index.html');
