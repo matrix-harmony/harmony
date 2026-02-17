@@ -68,7 +68,7 @@ function showStatus(message, type) {
   loginStatus.style.display = 'block';
 }
 async function startMatrixClient() {
-  console.log('starting client...');
+  console.log('Starting Haramony...');
 
 const userId = matrixClient.getUserId();
 const userName = userId.split(':')[0].substring(1);
@@ -116,7 +116,7 @@ if (userSettingsBtn) {
 
   matrixClient.once('sync', (state) => {
     if (state === 'PREPARED') {
-      console.log('sync complete, loading rooms...');
+      console.log('Sync Complete! Loading Rooms...');
       loadRooms();
     }
   });
@@ -149,10 +149,10 @@ function createRoomElement(room) {
   roomDiv.className = 'room-item';
   roomDiv.dataset.roomId = room.roomId;
 
-  const roomName = room.name || 'unnamed room';
-  
+  const roomName = room.name || 'Unnamed Room';
+
   const timeline = room.timeline;
-  let lastMessage = 'no messages yet';
+  let lastMessage = 'No Messages Yet';
   
   if (timeline.length > 0) {
     const lastEvent = timeline[timeline.length - 1];
@@ -178,7 +178,7 @@ function createRoomElement(room) {
 }
 
 function handleNewRoom(room) {
-  console.log('new room joined:', room.roomId);
+  console.log('New Room Joined:', room.roomId);
   loadRooms(); 
 }
 
@@ -186,7 +186,7 @@ function handleNewRoom(room) {
 function openRoom(roomId) {
   currentRoomId = roomId;
   const room = matrixClient.getRoom(roomId);
-  const roomName = room.name || 'unnamed room';
+  const roomName = room.name || 'Unnamed Room';
 
   currentRoomName.textContent = roomName;
   messageInputContainer.style.display = 'flex';

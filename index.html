@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>didi client</title>
+  <title>Harmony</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
     <div id="login-screen" class="screen active">
       <div class="login-container">
-        <h1>Welcome to didi</h1>
+        <h1>Welcome to Harmony</h1>
         
         <form id="login-form">
           <div class="form-group">
-            <label for="homeserver">homeserver</label>
+            <label for="homeserver">Homeserver</label>
             <input 
               type="text" 
               id="homeserver" 
@@ -25,17 +25,17 @@
           </div>
 
           <div class="form-group">
-            <label for="username">username</label>
+            <label for="username">Username</label>
             <input 
               type="text" 
               id="username" 
-              placeholder="@username:matrix.didi.party" 
+              placeholder="@username:homeserver" 
               required
             >
           </div>
 
           <div class="form-group">
-            <label for="password">password</label>
+            <label for="password">Password</label>
             <input 
               type="password" 
               id="password" 
@@ -44,7 +44,7 @@
             >
           </div>
 
-          <button type="submit" class="btn btn-primary">login</button>
+          <button type="submit" class="btn btn-primary">Login</button>
         </form>
 
         <div id="login-status" class="status-message"></div>
@@ -55,10 +55,10 @@
       <div class="chat-container">
         <div class="sidebar">
           <div class="sidebar-header">
-            <p>rooms</p>
+            <p>Rooms</p>
           </div>
           <div id="rooms-list" class="rooms-list">
-            <p class="loading">loading rooms..</p>
+            <p class="loading">Loading Rooms..</p>
           </div>
           <div class="user-info" id="user-info">
             <div class="user-avatar" id="user-avatar">U</div>
@@ -76,7 +76,7 @@
 
         <div class="main-content">
           <div class="chat-header" id="chat-header">
-            <h2 id="current-room-name">select room</h2>
+            <h2 id="current-room-name">Select Room</h2>
             <div id="member-count" class="member-count"></div>
           </div>
           
@@ -101,11 +101,11 @@
 
         <div class="members-sidebar" id="members-sidebar" style="display: none;">
           <div class="members-header">
-            <p>members</p>
-            <button id="toggle-members" class="btn btn-small">hide</button>
+            <p>Members</p>
+            <button id="toggle-members" class="btn btn-small">Hide</button>
           </div>
           <div class="members-list" id="members-list">
-            <p class="loading">loading members..</p>
+            <p class="loading">Loading Members..</p>
           </div>
         </div>
       </div>

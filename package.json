@@ -1,7 +1,7 @@
 {
-  "name": "didi-client",
+  "name": "harmony-client",
   "version": "1.0.0",
-  "description": "client built for didi.server using electron and matrix-js-sdk",
+  "description": "a matrix client based on the look of classic discord and sponsored by didi.party homeserver",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
