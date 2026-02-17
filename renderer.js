@@ -20,6 +20,19 @@ const membersSidebar = document.getElementById('members-sidebar');
 const memberCount = document.getElementById('member-count');
 const toggleMembersBtn = document.getElementById('toggle-members');
 
+function mxcToUrl(mxcUrl) {
+  if (!mxcUrl || !mxcUrl.startsWith('mxc://')) return null;
+  try {
+    const [, serverAndMedia] = mxcUrl.split('mxc://');
+    const [server, mediaId] = serverAndMedia.split('/');
+    const homeserver = matrixClient.getHomeserverUrl();
+    const accessToken = matrixClient.getAccessToken();
+    return `${homeserver}/_matrix/client/v1/media/download/${server}/${mediaId}?access_token=${accessToken}`;
+  } catch (e) {
+    return null;
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   console.log('Checking for saved session...');
   const savedToken = localStorage.getItem('matrix_access_token');
@@ -59,14 +72,12 @@ function saveSession(homeserver, accessToken, userId) {
   localStorage.setItem('matrix_access_token', accessToken);
   localStorage.setItem('matrix_user_id', userId);
   localStorage.setItem('matrix_homeserver', homeserver);
-  console.log('Session saved to localStorage');
 }
 
 function clearSession() {
   localStorage.removeItem('matrix_access_token');
   localStorage.removeItem('matrix_user_id');
   localStorage.removeItem('matrix_homeserver');
-  console.log('Session cleared from localStorage');
 }
 
 loginForm.addEventListener('submit', async (e) => {
@@ -82,16 +93,12 @@ loginForm.addEventListener('submit', async (e) => {
   submitBtn.textContent = 'connecting to didi.party';
 
   try {
-    matrixClient = sdk.createClient({
-      baseUrl: homeserver
-    });
+    matrixClient = sdk.createClient({ baseUrl: homeserver });
 
     const response = await matrixClient.login('m.login.password', {
       user: username,
       password: password
     });
-
-    console.log('Login successful!', response);
 
     saveSession(homeserver, response.access_token, response.user_id);
 
@@ -131,17 +138,28 @@ async function startMatrixClient() {
   const userAvatarElement = document.getElementById('user-avatar');
   const userSettingsBtn = document.getElementById('user-settings-btn');
 
-  if (userNameElement) {
-    userNameElement.textContent = userName;
-  }
+  if (userNameElement) userNameElement.textContent = userName;
+  if (userTagElement) userTagElement.textContent = userId;
+  if (userAvatarElement) userAvatarElement.textContent = userName.charAt(0).toUpperCase();
 
-  if (userTagElement) {
-    userTagElement.textContent = userId;
-  }
-
-  if (userAvatarElement) {
-    userAvatarElement.textContent = userName.charAt(0).toUpperCase();
-  }
+  matrixClient.once('sync', async (state) => {
+    if (state === 'PREPARED') {
+      const ownUser = matrixClient.getUser(userId);
+      if (ownUser?.avatarUrl) {
+        const avatarUrl = mxcToUrl(ownUser.avatarUrl);
+        if (avatarUrl && userAvatarElement) {
+          userAvatarElement.innerHTML = `
+            <img src="${avatarUrl}" 
+                 style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+                 onerror="this.parentElement.textContent='${userName.charAt(0).toUpperCase()}'">
+          `;
+          userAvatarElement.style.padding = '0';
+        }
+      }
+      console.log('Sync Complete! Loading Rooms...');
+      loadRooms();
+    }
+  });
 
   if (userSettingsBtn) {
     userSettingsBtn.addEventListener('click', async () => {
@@ -155,13 +173,6 @@ async function startMatrixClient() {
   matrixClient.on('Room', handleNewRoom);
 
   await matrixClient.startClient({ initialSyncLimit: 10 });
-
-  matrixClient.once('sync', (state) => {
-    if (state === 'PREPARED') {
-      console.log('Sync Complete! Loading Rooms...');
-      loadRooms();
-    }
-  });
 }
 
 async function performLogout() {
@@ -169,13 +180,9 @@ async function performLogout() {
     await matrixClient.logout();
     matrixClient.stopClient();
     matrixClient = null;
-    
-    // Clear saved session
     clearSession();
-    
     chatScreen.classList.remove('active');
     loginScreen.classList.add('active');
-    
     document.getElementById('password').value = '';
     loginStatus.style.display = 'none';
   } catch (error) {
@@ -192,17 +199,11 @@ function loadRooms() {
     return;
   }
 
-  rooms.sort((a, b) => {
-    const aTimestamp = a.getLastActiveTimestamp();
-    const bTimestamp = b.getLastActiveTimestamp();
-    return bTimestamp - aTimestamp;
-  });
+  rooms.sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp());
 
   roomsList.innerHTML = '';
-
   rooms.forEach(room => {
-    const roomElement = createRoomElement(room);
-    roomsList.appendChild(roomElement);
+    roomsList.appendChild(createRoomElement(room));
   });
 }
 
@@ -213,28 +214,8 @@ function createRoomElement(room) {
 
   const roomName = room.name || 'Unnamed Room';
 
-  const timeline = room.timeline;
-  let lastMessage = 'No Messages Yet';
-  
-  if (timeline.length > 0) {
-    const lastEvent = timeline[timeline.length - 1];
-    if (lastEvent.getType() === 'm.room.message') {
-      const content = lastEvent.getContent();
-      lastMessage = content.body || '';
-      if (lastMessage.length > 40) {
-        lastMessage = lastMessage.substring(0, 40) + '...';
-      }
-    }
-  }
-
-  roomDiv.innerHTML = `
-    <div class="room-name">${escapeHtml(roomName)}</div>
-    <div class="room-last-message">${escapeHtml(lastMessage)}</div>
-  `;
-
-  roomDiv.addEventListener('click', () => {
-    openRoom(room.roomId);
-  });
+  roomDiv.innerHTML = `<div class="room-name">${escapeHtml(roomName)}</div>`;
+  roomDiv.addEventListener('click', () => openRoom(room.roomId));
 
   return roomDiv;
 }
@@ -251,12 +232,9 @@ function openRoom(roomId) {
 
   currentRoomName.textContent = roomName;
   messageInputContainer.style.display = 'flex';
-  
   messageInput.placeholder = `Message #${roomName}`;
 
-  document.querySelectorAll('.room-item').forEach(item => {
-    item.classList.remove('active');
-  });
+  document.querySelectorAll('.room-item').forEach(item => item.classList.remove('active'));
   document.querySelector(`[data-room-id="${roomId}"]`)?.classList.add('active');
 
   loadMessages(roomId);
@@ -274,12 +252,9 @@ function loadMessages(roomId) {
     return;
   }
 
-  const recentMessages = timeline.slice(-50);
-  
-  recentMessages.forEach(event => {
+  timeline.slice(-50).forEach(event => {
     if (event.getType() === 'm.room.message') {
-      const messageElement = createMessageElement(event);
-      messagesContainer.appendChild(messageElement);
+      messagesContainer.appendChild(createMessageElement(event));
     }
   });
 
@@ -302,39 +277,40 @@ function createMessageElement(event) {
 
   const senderName = getSenderDisplayName(sender);
   const avatarLetter = senderName.charAt(0).toUpperCase();
-  messageDiv.setAttribute('data-avatar', avatarLetter);
+
+  const room = matrixClient.getRoom(currentRoomId);
+  const senderMember = room?.getMember(sender);
+  const senderAvatarMxc = senderMember?.getMxcAvatarUrl();
+  const senderAvatarUrl = mxcToUrl(senderAvatarMxc);
+
+  const avatarHtml = senderAvatarUrl
+    ? `<img src="${senderAvatarUrl}" alt="${avatarLetter}"
+            style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+            onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
+       <div class="avatar-fallback" style="display:none;">${avatarLetter}</div>`
+    : `<div class="avatar-fallback">${avatarLetter}</div>`;
 
   let messageContent = '';
-  
-if (content.msgtype === 'm.image') {
-  try {
-    const mxcUrl = content.url;
-    const [, serverAndMedia] = mxcUrl.split('mxc://');
-    const [server, mediaId] = serverAndMedia.split('/');
-    const homeserver = matrixClient.getHomeserverUrl();
-    const accessToken = matrixClient.getAccessToken();
-    const imageUrl = `${homeserver}/_matrix/client/v1/media/download/${server}/${mediaId}?access_token=${accessToken}`;
-    
-    console.log('Image URL:', imageUrl);
-    
-    messageContent = `
-      <div class="message-image-container">
-        <img src="${imageUrl}" 
-             alt="${escapeHtml(content.body || 'Image')}" 
-             class="message-image"
-             loading="lazy" />
-      </div>
-    `;
-  } catch (error) {
-    console.error('Error:', error);
-    messageContent = `<div class="message-content">[Image]</div>`;
-  }
-} else {
-    // Regular text message
+  if (content.msgtype === 'm.image') {
+    try {
+      const imageUrl = mxcToUrl(content.url);
+      messageContent = `
+        <div class="message-image-container">
+          <img src="${imageUrl}" 
+               alt="${escapeHtml(content.body || 'Image')}" 
+               class="message-image"
+               loading="lazy" />
+        </div>
+      `;
+    } catch (error) {
+      messageContent = `<div class="message-content">[Image]</div>`;
+    }
+  } else {
     messageContent = `<div class="message-content">${escapeHtml(content.body || '')}</div>`;
   }
 
   messageDiv.innerHTML = `
+    <div class="message-avatar">${avatarHtml}</div>
     <div class="message-header">
       <span class="message-sender">${escapeHtml(senderName)}</span>
       <span class="message-time">${timeString}</span>
@@ -348,29 +324,18 @@ if (content.msgtype === 'm.image') {
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('message-image')) {
     e.preventDefault();
-    
     const overlay = document.createElement('div');
     overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      cursor: pointer;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.9); display: flex;
+      align-items: center; justify-content: center;
+      z-index: 9999; cursor: pointer;
     `;
-    
     const img = document.createElement('img');
     img.src = e.target.src;
     img.style.cssText = 'max-width: 90%; max-height: 90%; object-fit: contain;';
-    
     overlay.appendChild(img);
     overlay.addEventListener('click', () => overlay.remove());
-    
     document.body.appendChild(overlay);
   }
 });
@@ -378,9 +343,7 @@ document.addEventListener('click', (e) => {
 const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
 
-attachBtn.addEventListener('click', () => {
-  fileInput.click();
-});
+attachBtn.addEventListener('click', () => fileInput.click());
 
 fileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
@@ -397,35 +360,29 @@ fileInput.addEventListener('change', async (e) => {
   }
 
   try {
-    console.log('Uploading image:', file.name);
-
     const statusMsg = document.createElement('div');
     statusMsg.className = 'upload-status';
     statusMsg.textContent = `Uploading ${file.name}...`;
     messagesContainer.appendChild(statusMsg);
     scrollToBottom();
+
     const uploadResponse = await matrixClient.uploadContent(file, {
       name: file.name,
       type: file.type,
       onlyContentUri: false
     });
 
-    console.log('Upload response:', uploadResponse);
     const mxcUrl = uploadResponse.content_uri;
 
     await matrixClient.sendMessage(currentRoomId, {
       msgtype: 'm.image',
       body: file.name,
       url: mxcUrl,
-      info: {
-        mimetype: file.type,
-        size: file.size
-      }
+      info: { mimetype: file.type, size: file.size }
     });
+
     statusMsg.remove();
     fileInput.value = '';
-
-    console.log('Image sent successfully!');
 
   } catch (error) {
     console.error('Failed to send image:', error);
@@ -436,28 +393,21 @@ fileInput.addEventListener('change', async (e) => {
 
 function getSenderDisplayName(userId) {
   if (!currentRoomId) return userId;
-  
   const room = matrixClient.getRoom(currentRoomId);
   const member = room?.getMember(userId);
-  
   return member?.name || userId.split(':')[0].substring(1);
 }
 
 function handleNewMessage(event, room, toStartOfTimeline) {
   if (toStartOfTimeline) return;
-  
   if (room.roomId !== currentRoomId) return;
-
   if (event.getType() !== 'm.room.message') return;
-
-  const messageElement = createMessageElement(event);
-  messagesContainer.appendChild(messageElement);
+  messagesContainer.appendChild(createMessageElement(event));
   scrollToBottom();
 }
 
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-
   const messageText = messageInput.value.trim();
   if (!messageText || !currentRoomId) return;
 
@@ -466,10 +416,8 @@ messageForm.addEventListener('submit', async (e) => {
       msgtype: 'm.text',
       body: messageText
     });
-
     messageInput.value = '';
     messageInput.focus();
-
   } catch (error) {
     console.error('Failed to send message:', error);
     alert('Failed to send message: ' + error.message);
@@ -505,23 +453,16 @@ function loadMembers(roomId) {
   const members = room.getJoinedMembers();
 
   const membersHeader = document.querySelector('.members-header p');
-  if (membersHeader) {
-    membersHeader.textContent = `${members.length} Members`;
-  }  
+  if (membersHeader) membersHeader.textContent = `${members.length} Members`;
+
   membersSidebar.style.display = 'flex';
-  
   membersList.innerHTML = '';
   
   members.sort((a, b) => {
-    const nameA = (a.name || a.userId).toLowerCase();
-    const nameB = (b.name || b.userId).toLowerCase();
-    return nameA.localeCompare(nameB);
+    return (a.name || a.userId).toLowerCase().localeCompare((b.name || b.userId).toLowerCase());
   });
   
-  members.forEach(member => {
-    const memberElement = createMemberElement(member);
-    membersList.appendChild(memberElement);
-  });
+  members.forEach(member => membersList.appendChild(createMemberElement(member)));
 }
 
 function createMemberElement(member) {
@@ -530,16 +471,25 @@ function createMemberElement(member) {
   
   const displayName = member.name || member.userId.split(':')[0].substring(1);
   const userId = member.userId;
-  
   const avatarLetter = displayName.charAt(0).toUpperCase();
   
-  const isCurrentUser = userId === matrixClient.getUserId();
-  if (isCurrentUser) {
+  if (userId === matrixClient.getUserId()) {
     memberDiv.classList.add('online');
   }
+
+  // Get member avatar
+  const memberAvatarMxc = member.getMxcAvatarUrl();
+  const memberAvatarUrl = mxcToUrl(memberAvatarMxc);
+
+  const avatarHtml = memberAvatarUrl
+    ? `<img src="${memberAvatarUrl}" alt="${avatarLetter}"
+            style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+            onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
+       <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;border-radius:50%;background:#5865f2;color:#fff;font-weight:600;">${avatarLetter}</div>`
+    : avatarLetter;
   
   memberDiv.innerHTML = `
-    <div class="member-avatar">${avatarLetter}</div>
+    <div class="member-avatar">${avatarHtml}</div>
     <div class="member-info">
       <div class="member-name" title="${escapeHtml(userId)}">${escapeHtml(displayName)}</div>
     </div>

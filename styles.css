@@ -447,10 +447,28 @@ body {
 }
 
 .message::before {
-  content: attr(data-avatar);
+  display: none;
+}
+
+.message-avatar {
   position: absolute;
   left: 16px;
   top: 2px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-fallback {
   width: 40px;
   height: 40px;
   border-radius: 50%;
