@@ -10,16 +10,18 @@ and then run
 npm start
 ```
 Todo:
-- Avatars
+- Avatars!
 - Proper space/subspace support
 - Voice (Not a priority)
-- Logo
+- Logo!
 - Encryption
 - SSO
 - Threads
 - Multi accounds/account switching
 - Browser/Mac/Linux
-- Settings
+- Settings!
 - Themes (Dark mode, AMOLED Dark Mode, modern discord burple)
-- Ability to put didi.party or matrix.org in the homeserver field instead of syping the address where its from (using well-known delegation)
-- Status indicators
+- Ability to put didi.party or matrix.org in the homeserver field instead of syping the address where its from (using well-known delegation)!
+- Status indicators!
+
+! = Must be added before first release
