@@ -410,20 +410,22 @@ body {
 
 #message-form {
   display: flex;
-  gap: 0;
   background: #40444b;
   border-radius: 8px;
   padding: 0;
+  width: 100%;
 }
 
 #message-input {
   flex: 1;
-  padding: 11px 16px;
+  padding: 16px 16px;
   background: transparent;
   border: none;
   border-radius: 8px;
   color: #dcddde;
   font-size: 15px;
+  width: 100%;
+  min-width: 0;
 }
 
 #message-input::placeholder {
@@ -435,7 +437,7 @@ body {
 }
 
 #message-form button {
-  display: none;
+  display: none; 
 }
 
 .members-sidebar {
