@@ -84,17 +84,29 @@ function clearSession() {
   localStorage.removeItem('matrix_homeserver');
 }
 
+function normalizeHomeserver(input) {
+  input = input.trim();
+  if (input.startsWith('http://') || input.startsWith('https://')) {
+    return input;
+  }
+  if (!input.startsWith('matrix.')) {
+    input = 'matrix.' + input;
+  }
+  return 'https://' + input;
+}
+
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   
-  const homeserver = document.getElementById('homeserver').value.trim();
+  const homeserverInput = document.getElementById('homeserver').value.trim();
+  const homeserver = normalizeHomeserver(homeserverInput);
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
 
   showStatus('connecting', 'success');
   const submitBtn = loginForm.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
-
+  
   try {
     matrixClient = sdk.createClient({ baseUrl: homeserver });
 
