@@ -106,7 +106,7 @@ loginForm.addEventListener('submit', async (e) => {
   showStatus('connecting', 'success');
   const submitBtn = loginForm.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
-  
+
   try {
     matrixClient = sdk.createClient({ baseUrl: homeserver });
 
@@ -545,7 +545,13 @@ function openRoom(roomId) {
   const room = matrixClient.getRoom(roomId);
   const roomName = room.name || 'Unnamed Room';
 
-  currentRoomName.textContent = roomName;
+  const isEncrypted = matrixClient.isRoomEncrypted(roomId);
+  
+  currentRoomName.innerHTML = `
+    <span class="encryption-indicator ${isEncrypted ? 'encrypted' : 'unencrypted'}"></span>
+    ${escapeHtml(roomName)}
+  `;
+  
   messageInputContainer.style.display = 'flex';
   messageInput.placeholder = `Message #${roomName}`;
 
@@ -590,12 +596,16 @@ async function loadFullRoomHistory(roomId) {
   const maxLoads = 10; 
 
   while (loadCount < maxLoads) {
+    if (currentRoomId !== roomId) return;
+    
     try {
       const result = await matrixClient.scrollback(room, 50);
       
       if (!result || result === 0) break;
       
       loadCount++;
+
+      if (currentRoomId !== roomId) return;
 
       const timeline = room.timeline;
       messagesContainer.innerHTML = '';
