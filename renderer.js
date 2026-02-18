@@ -697,6 +697,14 @@ async function loadOlderMessages(roomId) {
   isLoadingHistory = false;
 }
 
+function linkifyText(text) {
+  const escaped = escapeHtml(text);
+  const urlPattern = /(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim;
+  return escaped.replace(urlPattern, (url) => {
+  return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="message-link">${url}</a>`;
+  });
+}
+
 function createMessageElement(event, prevEvent = null) {
   const messageDiv = document.createElement('div');
 
@@ -705,7 +713,7 @@ function createMessageElement(event, prevEvent = null) {
   const timestamp = new Date(event.getDate());
 
   messageDiv.dataset.senderId = sender;
-  messageDiv.dataset.timestamp = timestamp.getTime(); 
+  messageDiv.dataset.timestamp = timestamp.getTime();
 
   const timeString = timestamp.toLocaleTimeString([], {
     hour: 'numeric',
@@ -715,11 +723,24 @@ function createMessageElement(event, prevEvent = null) {
 
   const senderName = getSenderDisplayName(sender);
   const avatarLetter = senderName.charAt(0).toUpperCase();
-
-  const shouldGroup = prevEvent &&
-    prevEvent.getSender() === sender &&
-    prevEvent.getType() === 'm.room.message' &&
-    (timestamp - new Date(prevEvent.getDate())) < 5 * 60 * 1000;
+  let shouldGroup = false;
+  if (!prevEvent) {
+    const messages = messagesContainer.querySelectorAll('.message');
+    const lastMessage = messages[messages.length - 1];
+    
+    if (lastMessage) {
+      const lastSenderId = lastMessage.dataset.senderId;
+      const lastTimestamp = parseInt(lastMessage.dataset.timestamp || '0');
+      
+      shouldGroup = lastSenderId === sender &&
+                    (timestamp.getTime() - lastTimestamp) < 5 * 60 * 1000;
+    }
+  } else {
+    shouldGroup = prevEvent &&
+      prevEvent.getSender() === sender &&
+      prevEvent.getType() === 'm.room.message' &&
+      (timestamp - new Date(prevEvent.getDate())) < 5 * 60 * 1000;
+  }
 
   if (shouldGroup) {
     messageDiv.className = 'message message-grouped';
@@ -757,7 +778,8 @@ function createMessageElement(event, prevEvent = null) {
       messageContent = `<div class="message-content">[Image]</div>`;
     }
   } else {
-    messageContent = `<div class="message-content">${escapeHtml(content.body || '')}</div>`;
+    const linkedText = linkifyText(content.body || '');
+    messageContent = `<div class="message-content">${linkedText}</div>`;
   }
 
   if (shouldGroup) {
@@ -1003,6 +1025,14 @@ document.addEventListener('click', (e) => {
     overlay.appendChild(img);
     overlay.addEventListener('click', () => overlay.remove());
     document.body.appendChild(overlay);
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('message-link')) {
+    e.preventDefault();
+    const { shell } = require('electron');
+    shell.openExternal(e.target.href);
   }
 });
 

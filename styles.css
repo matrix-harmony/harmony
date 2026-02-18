@@ -782,6 +782,16 @@ body {
   opacity: 1;
 }
 
+.message-link {
+  color: #00aff4;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.message-link:hover {
+  text-decoration: underline;
+}
+
 .loading-history {
   text-align: center;
   padding: 12px;
