@@ -1,9 +1,9 @@
 const sdk = require('matrix-js-sdk');
-
 let matrixClient = null;
 let currentRoomId = null;
 let currentSpaceId = null;
 let currentHomeView = 'dms';
+let currentProfileMember = null;
 let isLoadingHistory = false;
 let canLoadMore = true;
 let allMembers = [];
@@ -26,7 +26,7 @@ const membersList = document.getElementById('members-list');
 const membersSidebar = document.getElementById('members-sidebar');
 const memberCount = document.getElementById('member-count');
 const toggleMembersBtn = document.getElementById('toggle-members');
-const MEMBER_HEIGHT = 42; 
+const MEMBER_HEIGHT = 42;
 const RENDER_BUFFER = 10;
 
 function mxcToUrl(mxcUrl) {
@@ -101,6 +101,7 @@ function normalizeHomeserver(input) {
 
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+
   
   const homeserverInput = document.getElementById('homeserver').value.trim();
   const homeserver = normalizeHomeserver(homeserverInput);
@@ -212,16 +213,16 @@ async function performLogout() {
       matrixClient.stopClient();
       await matrixClient.logout();
     }
-    
+
     matrixClient = null;
     currentRoomId = null;
     currentSpaceId = null;
     clearSession();
-    
+
     roomsList.innerHTML = '';
     messagesContainer.innerHTML = '';
     membersList.innerHTML = '';
-    
+
     const submitBtn = loginForm.querySelector('button[type="submit"]');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Login';
@@ -230,17 +231,17 @@ async function performLogout() {
     if (usernameInput) usernameInput.value = '';
     if (passwordInput) passwordInput.value = '';
     loginStatus.style.display = 'none';
-    
+
     chatScreen.classList.remove('active');
     loginScreen.classList.add('active');
-    
+
     requestAnimationFrame(() => {
       if (usernameInput) {
         usernameInput.focus();
         usernameInput.select();
       }
     });
-    
+
     console.log('Logout successful');
   } catch (error) {
     console.error('Logout error:', error);
@@ -248,7 +249,7 @@ async function performLogout() {
     clearSession();
     chatScreen.classList.remove('active');
     loginScreen.classList.add('active');
-    
+
     requestAnimationFrame(() => {
       const usernameInput = document.getElementById('username');
       if (usernameInput) {
@@ -421,14 +422,14 @@ function loadRoomsForSpace(spaceId) {
   allRooms.forEach(room => {
     const roomId = room.roomId;
     const localId = roomId.split(':')[0];
-    
+
     const isChild = spaceChildIds.has(roomId) || spaceChildIds.has(localId);
-    
+
     if (!isChild) {
       const parentEvents = room.currentState.getStateEvents('m.space.parent') || [];
       if (!parentEvents.some(e => e.getStateKey() === spaceId)) return;
     }
-    
+
     if (room.isSpaceRoom()) {
       subSpaces.push(room);
     } else {
@@ -458,9 +459,9 @@ function renderSpaceCategory(subSpace, parentSpaceId) {
   const categoryDiv = document.createElement('div');
   categoryDiv.className = 'space-category';
   categoryDiv.dataset.spaceId = subSpace.roomId;
-  
+
   const isExpanded = localStorage.getItem(`space-${subSpace.roomId}-expanded`) !== 'false';
-  
+
   categoryDiv.innerHTML = `
     <div class="space-category-header">
       <svg class="space-category-arrow ${isExpanded ? 'expanded' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -470,36 +471,36 @@ function renderSpaceCategory(subSpace, parentSpaceId) {
     </div>
     <div class="space-category-rooms ${isExpanded ? 'expanded' : ''}"></div>
   `;
-  
+
   roomsList.appendChild(categoryDiv);
-  
+
   const header = categoryDiv.querySelector('.space-category-header');
   const arrow = categoryDiv.querySelector('.space-category-arrow');
   const roomsContainer = categoryDiv.querySelector('.space-category-rooms');
-  
+
   header.addEventListener('click', () => {
     const isNowExpanded = !arrow.classList.contains('expanded');
     arrow.classList.toggle('expanded');
     roomsContainer.classList.toggle('expanded');
     localStorage.setItem(`space-${subSpace.roomId}-expanded`, isNowExpanded);
   });
-  
+
   const allRooms = matrixClient.getRooms();
   const subSpaceChildEvents = subSpace.currentState.getStateEvents('m.space.child') || [];
   const subSpaceChildIds = new Set(subSpaceChildEvents.map(e => e.getStateKey()).filter(Boolean));
-  
+
   const categoryRooms = allRooms.filter(room => {
     if (room.isSpaceRoom()) return false;
-    
+
     const roomId = room.roomId;
     const localId = roomId.split(':')[0];
-    
+
     if (subSpaceChildIds.has(roomId) || subSpaceChildIds.has(localId)) return true;
-    
+
     const parentEvents = room.currentState.getStateEvents('m.space.parent') || [];
     return parentEvents.some(e => e.getStateKey() === subSpace.roomId);
   });
-  
+
   categoryRooms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   categoryRooms.forEach(room => {
     roomsContainer.appendChild(createRoomElement(room));
@@ -550,12 +551,12 @@ function openRoom(roomId) {
   const roomName = room.name || 'Unnamed Room';
 
   const isEncrypted = matrixClient.isRoomEncrypted(roomId);
-  
+
   currentRoomName.innerHTML = `
     <span class="encryption-indicator ${isEncrypted ? 'encrypted' : 'unencrypted'}"></span>
     ${escapeHtml(roomName)}
   `;
-  
+
   messageInputContainer.style.display = 'flex';
   messageInput.placeholder = `Message #${roomName}`;
 
@@ -589,31 +590,31 @@ function loadMessages(roomId) {
 
   canLoadMore = timeline.length >= 50;
   scrollToBottom();
-  
+
   setupInfiniteScroll(roomId);
 }
 
 async function loadFullRoomHistory(roomId) {
   const room = matrixClient.getRoom(roomId);
-  
+
   let loadCount = 0;
-  const maxLoads = 10; 
+  const maxLoads = 10;
 
   while (loadCount < maxLoads) {
     if (currentRoomId !== roomId) return;
-    
+
     try {
       const result = await matrixClient.scrollback(room, 50);
-      
+
       if (!result || result === 0) break;
-      
+
       loadCount++;
 
       if (currentRoomId !== roomId) return;
 
       const timeline = room.timeline;
       messagesContainer.innerHTML = '';
-      
+
       timeline.forEach((event, index) => {
         if (event.getType() === 'm.room.message') {
           const prevEvent = index > 0 ? timeline[index - 1] : null;
@@ -622,58 +623,58 @@ async function loadFullRoomHistory(roomId) {
           messagesContainer.appendChild(messageEl);
         }
       });
-      
+
       scrollToBottom();
-      
+
     } catch (error) {
       console.error('Failed to load room history:', error);
       break;
     }
   }
-  
+
   canLoadMore = loadCount < maxLoads;
   setupInfiniteScroll(roomId);
 }
 
 function setupInfiniteScroll(roomId) {
   messagesContainer.removeEventListener('scroll', handleScroll);
-  
+
   function handleScroll() {
     if (messagesContainer.scrollTop < 100 && !isLoadingHistory && canLoadMore) {
       loadOlderMessages(roomId);
     }
   }
-  
+
   messagesContainer.addEventListener('scroll', handleScroll);
 }
 
 async function loadOlderMessages(roomId) {
   if (isLoadingHistory || !canLoadMore) return;
-  
+
   isLoadingHistory = true;
   const room = matrixClient.getRoom(roomId);
-  
+
   const oldScrollHeight = messagesContainer.scrollHeight;
-  
+
   const loadingDiv = document.createElement('div');
   loadingDiv.className = 'loading-history';
   loadingDiv.textContent = 'Loading older messages...';
   messagesContainer.insertBefore(loadingDiv, messagesContainer.firstChild);
-  
+
   try {
     await matrixClient.scrollback(room, 20);
-    
+
     loadingDiv.remove();
-    
+
     const timeline = room.timeline;
     const oldestDisplayed = messagesContainer.querySelector('.message')?.dataset?.eventId;
-    
+
     let startIndex = 0;
     if (oldestDisplayed) {
       startIndex = timeline.findIndex(e => e.getId() === oldestDisplayed);
       if (startIndex === -1) startIndex = 0;
     }
-    
+
     const olderEvents = timeline.slice(Math.max(0, startIndex - 20), startIndex);
     olderEvents.reverse().forEach((event, index) => {
       if (event.getType() === 'm.room.message') {
@@ -683,36 +684,38 @@ async function loadOlderMessages(roomId) {
         messagesContainer.insertBefore(messageEl, messagesContainer.firstChild);
       }
     });
-    
+
     const newScrollHeight = messagesContainer.scrollHeight;
     messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
     canLoadMore = startIndex > 20;
-    
+
   } catch (error) {
     console.error('Failed to load older messages:', error);
     loadingDiv.remove();
   }
-  
+
   isLoadingHistory = false;
 }
 
 function createMessageElement(event, prevEvent = null) {
   const messageDiv = document.createElement('div');
-  
+
   const sender = event.getSender();
   const content = event.getContent();
   const timestamp = new Date(event.getDate());
-  
-  const timeString = timestamp.toLocaleTimeString([], { 
-    hour: 'numeric', 
+
+  messageDiv.dataset.senderId = sender;
+
+  const timeString = timestamp.toLocaleTimeString([], {
+    hour: 'numeric',
     minute: '2-digit',
-    hour12: true 
+    hour12: true
   });
 
   const senderName = getSenderDisplayName(sender);
   const avatarLetter = senderName.charAt(0).toUpperCase();
 
-  const shouldGroup = prevEvent && 
+  const shouldGroup = prevEvent &&
     prevEvent.getSender() === sender &&
     prevEvent.getType() === 'm.room.message' &&
     (timestamp - new Date(prevEvent.getDate())) < 5 * 60 * 1000;
@@ -721,7 +724,7 @@ function createMessageElement(event, prevEvent = null) {
     messageDiv.className = 'message message-grouped';
   } else {
     messageDiv.className = 'message';
-    
+
     const room = matrixClient.getRoom(currentRoomId);
     const senderMember = room?.getMember(sender);
     const senderAvatarMxc = senderMember?.getMxcAvatarUrl();
@@ -729,10 +732,10 @@ function createMessageElement(event, prevEvent = null) {
 
     const avatarHtml = senderAvatarUrl
       ? `<img src="${senderAvatarUrl}" alt="${avatarLetter}"
-              style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+              style="width:100%;height:100%;object-fit:cover;border-radius:50%;cursor:pointer;"
               onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
-         <div class="avatar-fallback" style="display:none;">${avatarLetter}</div>`
-      : `<div class="avatar-fallback">${avatarLetter}</div>`;
+         <div class="avatar-fallback" style="display:none;cursor:pointer;">${avatarLetter}</div>`
+      : `<div class="avatar-fallback" style="cursor:pointer;">${avatarLetter}</div>`;
 
     messageDiv.innerHTML = `<div class="message-avatar">${avatarHtml}</div>`;
   }
@@ -766,7 +769,7 @@ function createMessageElement(event, prevEvent = null) {
   } else {
     messageDiv.innerHTML += `
       <div class="message-header">
-        <span class="message-sender">${escapeHtml(senderName)}</span>
+        <span class="message-sender" style="cursor:pointer;">${escapeHtml(senderName)}</span>
         <span class="message-time">${timeString}</span>
       </div>
       ${messageContent}
@@ -790,6 +793,157 @@ function handleNewMessage(event, room, toStartOfTimeline) {
   messagesContainer.appendChild(createMessageElement(event));
   scrollToBottom();
 }
+
+function getAverageColor(imgUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = function () {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      let r = 0, g = 0, b = 0;
+
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+      }
+
+      const pixelCount = data.length / 4;
+      r = Math.floor(r / pixelCount);
+      g = Math.floor(g / pixelCount);
+      b = Math.floor(b / pixelCount);
+
+      resolve(`rgb(${r}, ${g}, ${b})`);
+    };
+    img.onerror = () => resolve('#5865f2');
+    img.src = imgUrl;
+  });
+}
+
+function showUserProfile(member, targetElement) {
+  currentProfileMember = member;
+
+  const popup = document.getElementById('user-profile-popup');
+  const popupContent = popup.querySelector('.profile-popup-content');
+  const banner = document.getElementById('profile-banner');
+  const avatar = document.getElementById('profile-avatar');
+  const displayName = document.getElementById('profile-display-name');
+  const username = document.getElementById('profile-username');
+
+  const memberDisplayName = member.name || member.userId.split(':')[0].substring(1);
+  const memberUserId = member.userId;
+  const avatarLetter = memberDisplayName.charAt(0).toUpperCase();
+
+  displayName.textContent = memberDisplayName;
+  username.textContent = memberUserId;
+
+  const memberAvatarMxc = member.getMxcAvatarUrl();
+  const memberAvatarUrl = mxcToUrl(memberAvatarMxc);
+
+  if (memberAvatarUrl) {
+    avatar.innerHTML = `<img src="${memberAvatarUrl}" alt="${avatarLetter}" style="width:100%;height:100%;object-fit:cover;">`;
+
+    getAverageColor(memberAvatarUrl).then(color => {
+      banner.style.background = color;
+    }).catch(() => {
+      banner.style.background = '#5865f2';
+    });
+  } else {
+    avatar.textContent = avatarLetter;
+    banner.style.background = '#5865f2';
+  }
+
+  document.querySelectorAll('.member-item').forEach(m => m.classList.remove('profile-open'));
+  if (targetElement.classList && targetElement.classList.contains('member-item')) {
+    targetElement.classList.add('profile-open');
+  }
+
+  popup.classList.add('active');
+
+  positionProfilePopup(popupContent, targetElement);
+}
+
+function positionProfilePopup(popupContent, targetElement) {
+  const targetRect = targetElement.getBoundingClientRect();
+  const popupRect = popupContent.getBoundingClientRect();
+
+  let left = targetRect.right + 8;
+  let top = targetRect.top;
+
+  if (left + popupRect.width > window.innerWidth - 12) {
+    left = targetRect.left - popupRect.width - 8;
+  }
+
+  if (top + popupRect.height > window.innerHeight - 16) {
+    top = window.innerHeight - popupRect.height - 16;
+  }
+
+  if (top < 16) {
+    top = 16;
+  }
+
+  popupContent.style.left = `${left}px`;
+  popupContent.style.top = `${top}px`;
+}
+
+window.addEventListener('resize', () => {
+  const popup = document.getElementById('user-profile-popup');
+  if (popup.classList.contains('active')) {
+    const highlightedMember = document.querySelector('.member-item.profile-open');
+    if (highlightedMember) {
+      const popupContent = popup.querySelector('.profile-popup-content');
+      positionProfilePopup(popupContent, highlightedMember);
+    }
+  }
+});
+
+const profilePopup = document.getElementById('user-profile-popup');
+const profileClose = document.getElementById('profile-close');
+
+profileClose?.addEventListener('click', () => {
+  profilePopup.classList.remove('active');
+  document.querySelectorAll('.member-item').forEach(m => m.classList.remove('profile-open'));
+  currentProfileMember = null;
+});
+
+document.addEventListener('click', (e) => {
+  if (profilePopup.classList.contains('active')) {
+    const popupContent = profilePopup.querySelector('.profile-popup-content');
+
+    if (!popupContent.contains(e.target) &&
+        !e.target.closest('.member-item') &&
+        !e.target.closest('.message-avatar') &&
+        !e.target.classList.contains('message-sender')) {
+      profilePopup.classList.remove('active');
+      document.querySelectorAll('.member-item').forEach(m => m.classList.remove('profile-open'));
+      currentProfileMember = null;
+    }
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.message-avatar') || e.target.classList.contains('message-sender')) {
+    const messageDiv = e.target.closest('.message');
+    if (!messageDiv) return;
+
+    const senderId = messageDiv.dataset.senderId;
+    if (!senderId) return;
+
+    const room = matrixClient.getRoom(currentRoomId);
+    const member = room?.getMember(senderId);
+    if (member) {
+      const targetElement = e.target.closest('.message-avatar') || e.target;
+      showUserProfile(member, targetElement);
+    }
+  }
+});
 
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('message-image')) {
@@ -908,18 +1062,18 @@ function loadMembers(roomId) {
   membersList.innerHTML = '';
   membersList.style.position = '';
   membersList.style.height = '';
-  
+
   allMembers.sort((a, b) => {
     return (a.name || a.userId).toLowerCase().localeCompare((b.name || b.userId).toLowerCase());
   });
-  
+
   if (allMembers.length > 100) {
     const containerHeight = allMembers.length * MEMBER_HEIGHT;
     membersList.style.position = 'relative';
     membersList.style.height = `${containerHeight}px`;
-    
+
     renderVisibleMembers(0, 40);
-    
+
     membersList.removeEventListener('scroll', handleMemberScroll);
     membersList.addEventListener('scroll', handleMemberScroll);
   } else {
@@ -930,13 +1084,13 @@ function loadMembers(roomId) {
 function handleMemberScroll() {
   const scrollTop = membersList.scrollTop;
   const viewportHeight = membersList.clientHeight;
-  
+
   const startIndex = Math.max(0, Math.floor(scrollTop / MEMBER_HEIGHT) - RENDER_BUFFER);
   const endIndex = Math.min(
     allMembers.length,
     Math.ceil((scrollTop + viewportHeight) / MEMBER_HEIGHT) + RENDER_BUFFER
   );
-  
+
   if (startIndex !== renderedMemberRange.start || endIndex !== renderedMemberRange.end) {
     renderVisibleMembers(startIndex, endIndex);
   }
@@ -944,20 +1098,20 @@ function handleMemberScroll() {
 
 function renderVisibleMembers(startIndex, endIndex) {
   renderedMemberRange = { start: startIndex, end: endIndex };
-  
+
   const existingMembers = membersList.querySelectorAll('.member-item');
   existingMembers.forEach(el => el.remove());
-  
+
   for (let i = startIndex; i < endIndex; i++) {
     const member = allMembers[i];
     if (!member) continue;
-    
+
     const memberEl = createMemberElement(member);
     memberEl.style.position = 'absolute';
     memberEl.style.top = `${i * MEMBER_HEIGHT}px`;
     memberEl.style.width = '100%';
     memberEl.style.height = `${MEMBER_HEIGHT}px`;
-    
+
     membersList.appendChild(memberEl);
   }
 }
@@ -965,11 +1119,11 @@ function renderVisibleMembers(startIndex, endIndex) {
 function createMemberElement(member) {
   const memberDiv = document.createElement('div');
   memberDiv.className = 'member-item';
-  
+
   const displayName = member.name || member.userId.split(':')[0].substring(1);
   const userId = member.userId;
   const avatarLetter = displayName.charAt(0).toUpperCase();
-  
+
   if (userId === matrixClient.getUserId()) {
     memberDiv.classList.add('online');
   }
@@ -983,13 +1137,15 @@ function createMemberElement(member) {
             onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
        <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;border-radius:50%;background:#5865f2;color:#fff;font-weight:600;">${avatarLetter}</div>`
     : avatarLetter;
-  
+
   memberDiv.innerHTML = `
     <div class="member-avatar">${avatarHtml}</div>
     <div class="member-info">
       <div class="member-name" title="${escapeHtml(userId)}">${escapeHtml(displayName)}</div>
     </div>
   `;
-  
+
+  memberDiv.addEventListener('click', () => showUserProfile(member, memberDiv));
+
   return memberDiv;
 }
