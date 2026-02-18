@@ -128,7 +128,23 @@ body {
 }
 
 .btn-small:hover {
-  background: #4f545c;
+ background: #4f545c;
+}
+
+.retry-btn {
+  margin-left: 8px;
+  padding: 4px 12px;
+  background: #ed4245;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.retry-btn:hover {
+  background: #c03537;
 }
 
 .encryption-indicator {
@@ -739,7 +755,6 @@ body {
 .message-time {
   color: #72767d;
   font-size: 12px;
-  margin-left: 4px;
 }
 
 .message-grouped {

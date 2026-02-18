@@ -705,6 +705,7 @@ function createMessageElement(event, prevEvent = null) {
   const timestamp = new Date(event.getDate());
 
   messageDiv.dataset.senderId = sender;
+  messageDiv.dataset.timestamp = timestamp.getTime(); 
 
   const timeString = timestamp.toLocaleTimeString([], {
     hour: 'numeric',
@@ -780,17 +781,52 @@ function createMessageElement(event, prevEvent = null) {
 }
 
 function getSenderDisplayName(userId) {
-  if (!currentRoomId) return userId;
+  if (!currentRoomId) return userId.split(':')[0].substring(1);
   const room = matrixClient.getRoom(currentRoomId);
   const member = room?.getMember(userId);
-  return member?.name || userId.split(':')[0].substring(1);
+  
+  if (member?.name) {
+    const name = member.name;
+    const parenIndex = name.indexOf('(');
+    if (parenIndex > 0) {
+      return name.substring(0, parenIndex).trim();
+    }
+    return name;
+  }
+  
+  return userId.split(':')[0].substring(1);
 }
 
 function handleNewMessage(event, room, toStartOfTimeline) {
   if (toStartOfTimeline) return;
   if (room.roomId !== currentRoomId) return;
   if (event.getType() !== 'm.room.message') return;
-  messagesContainer.appendChild(createMessageElement(event));
+  
+  if (event.getSender() === matrixClient.getUserId()) {
+    const tempMessages = messagesContainer.querySelectorAll('[data-temp-id]');
+    tempMessages.forEach(tempMsg => tempMsg.remove());
+  }
+  
+  const messages = messagesContainer.querySelectorAll('.message');
+  const lastMessage = messages[messages.length - 1];
+  
+  let prevEvent = null;
+  if (lastMessage) {
+    const lastSenderId = lastMessage.dataset.senderId;
+    const lastTimestamp = parseInt(lastMessage.dataset.timestamp || '0');
+    const currentTimestamp = event.getDate();
+    
+    if (lastSenderId === event.getSender() && 
+        (currentTimestamp - lastTimestamp) < 5 * 60 * 1000) {
+      prevEvent = {
+        getSender: () => lastSenderId,
+        getType: () => 'm.room.message',
+        getDate: () => lastTimestamp
+      };
+    }
+  }
+  
+  messagesContainer.appendChild(createMessageElement(event, prevEvent));
   scrollToBottom();
 }
 
@@ -837,7 +873,13 @@ function showUserProfile(member, targetElement) {
   const displayName = document.getElementById('profile-display-name');
   const username = document.getElementById('profile-username');
 
-  const memberDisplayName = member.name || member.userId.split(':')[0].substring(1);
+  let memberDisplayName = member.name || member.userId.split(':')[0].substring(1);
+  
+  const parenIndex = memberDisplayName.indexOf('(');
+  if (parenIndex > 0) {
+    memberDisplayName = memberDisplayName.substring(0, parenIndex).trim();
+  }
+  
   const memberUserId = member.userId;
   const avatarLetter = memberDisplayName.charAt(0).toUpperCase();
 
@@ -1020,16 +1062,55 @@ messageForm.addEventListener('submit', async (e) => {
   const messageText = messageInput.value.trim();
   if (!messageText || !currentRoomId) return;
 
+  messageInput.value = '';
+  messageInput.focus();
+
+  const tempId = `temp-${Date.now()}`;
+  const optimisticEvent = {
+    getSender: () => matrixClient.getUserId(),
+    getContent: () => ({ msgtype: 'm.text', body: messageText }),
+    getDate: () => Date.now(),
+    getType: () => 'm.room.message',
+    getId: () => tempId
+  };
+
+  const optimisticMessageEl = createMessageElement(optimisticEvent);
+  optimisticMessageEl.dataset.tempId = tempId;
+  optimisticMessageEl.dataset.timestamp = Date.now();
+  optimisticMessageEl.style.opacity = '0.6';
+  
+  messagesContainer.appendChild(optimisticMessageEl);
+  scrollToBottom();
+
   try {
     await matrixClient.sendMessage(currentRoomId, {
       msgtype: 'm.text',
       body: messageText
     });
-    messageInput.value = '';
-    messageInput.focus();
+
+    const tempMsg = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
+    if (tempMsg) {
+      tempMsg.remove();
+    }
+
   } catch (error) {
     console.error('Failed to send message:', error);
-    alert('Failed to send message: ' + error.message);
+    
+    const tempMsg = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
+    if (tempMsg) {
+      tempMsg.style.opacity = '1';
+      tempMsg.style.background = 'rgba(237, 66, 69, 0.1)';
+      
+      const retryBtn = document.createElement('button');
+      retryBtn.textContent = 'Retry';
+      retryBtn.className = 'retry-btn';
+      retryBtn.onclick = () => {
+        tempMsg.remove();
+        messageInput.value = messageText;
+        messageForm.dispatchEvent(new Event('submit'));
+      };
+      tempMsg.appendChild(retryBtn);
+    }
   }
 });
 
