@@ -6,6 +6,8 @@ let currentSpaceId = null;
 let currentHomeView = 'dms';
 let isLoadingHistory = false;
 let canLoadMore = true;
+let allMembers = [];
+let renderedMemberRange = { start: 0, end: 40 };
 
 const loginScreen = document.getElementById('login-screen');
 const chatScreen = document.getElementById('chat-screen');
@@ -24,6 +26,8 @@ const membersList = document.getElementById('members-list');
 const membersSidebar = document.getElementById('members-sidebar');
 const memberCount = document.getElementById('member-count');
 const toggleMembersBtn = document.getElementById('toggle-members');
+const MEMBER_HEIGHT = 42; 
+const RENDER_BUFFER = 10;
 
 function mxcToUrl(mxcUrl) {
   if (!mxcUrl || !mxcUrl.startsWith('mxc://')) return null;
@@ -895,19 +899,67 @@ function loadMembers(roomId) {
   const room = matrixClient.getRoom(roomId);
   if (!room) return;
 
-  const members = room.getJoinedMembers();
+  allMembers = room.getJoinedMembers();
 
   const membersHeader = document.querySelector('.members-header p');
-  if (membersHeader) membersHeader.textContent = `${members.length} Members`;
+  if (membersHeader) membersHeader.textContent = `${allMembers.length} Members`;
 
   membersSidebar.style.display = 'flex';
   membersList.innerHTML = '';
+  membersList.style.position = '';
+  membersList.style.height = '';
   
-  members.sort((a, b) => {
+  allMembers.sort((a, b) => {
     return (a.name || a.userId).toLowerCase().localeCompare((b.name || b.userId).toLowerCase());
   });
   
-  members.forEach(member => membersList.appendChild(createMemberElement(member)));
+  if (allMembers.length > 100) {
+    const containerHeight = allMembers.length * MEMBER_HEIGHT;
+    membersList.style.position = 'relative';
+    membersList.style.height = `${containerHeight}px`;
+    
+    renderVisibleMembers(0, 40);
+    
+    membersList.removeEventListener('scroll', handleMemberScroll);
+    membersList.addEventListener('scroll', handleMemberScroll);
+  } else {
+    allMembers.forEach(member => membersList.appendChild(createMemberElement(member)));
+  }
+}
+
+function handleMemberScroll() {
+  const scrollTop = membersList.scrollTop;
+  const viewportHeight = membersList.clientHeight;
+  
+  const startIndex = Math.max(0, Math.floor(scrollTop / MEMBER_HEIGHT) - RENDER_BUFFER);
+  const endIndex = Math.min(
+    allMembers.length,
+    Math.ceil((scrollTop + viewportHeight) / MEMBER_HEIGHT) + RENDER_BUFFER
+  );
+  
+  if (startIndex !== renderedMemberRange.start || endIndex !== renderedMemberRange.end) {
+    renderVisibleMembers(startIndex, endIndex);
+  }
+}
+
+function renderVisibleMembers(startIndex, endIndex) {
+  renderedMemberRange = { start: startIndex, end: endIndex };
+  
+  const existingMembers = membersList.querySelectorAll('.member-item');
+  existingMembers.forEach(el => el.remove());
+  
+  for (let i = startIndex; i < endIndex; i++) {
+    const member = allMembers[i];
+    if (!member) continue;
+    
+    const memberEl = createMemberElement(member);
+    memberEl.style.position = 'absolute';
+    memberEl.style.top = `${i * MEMBER_HEIGHT}px`;
+    memberEl.style.width = '100%';
+    memberEl.style.height = `${MEMBER_HEIGHT}px`;
+    
+    membersList.appendChild(memberEl);
+  }
 }
 
 function createMemberElement(member) {
