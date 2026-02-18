@@ -94,7 +94,6 @@ loginForm.addEventListener('submit', async (e) => {
   showStatus('connecting', 'success');
   const submitBtn = loginForm.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
-  submitBtn.textContent = 'connecting to didi.party';
 
   try {
     matrixClient = sdk.createClient({ baseUrl: homeserver });
@@ -346,11 +345,16 @@ function loadSpaces() {
   spacesList.innerHTML = '';
 
   const rooms = matrixClient.getRooms();
-  const spaces = rooms.filter(room => room.isSpaceRoom());
+  const allSpaces = rooms.filter(room => room.isSpaceRoom());
 
-  if (spaces.length === 0) return;
+  if (allSpaces.length === 0) return;
 
-  spaces.forEach(space => spacesList.appendChild(createSpaceIcon(space)));
+  const topLevelSpaces = allSpaces.filter(space => {
+    const parentEvents = space.currentState.getStateEvents('m.space.parent') || [];
+    return parentEvents.length === 0;
+  });
+
+  topLevelSpaces.forEach(space => spacesList.appendChild(createSpaceIcon(space)));
 }
 
 function createSpaceIcon(space) {
