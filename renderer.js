@@ -4,9 +4,12 @@ let matrixClient = null;
 let currentRoomId = null;
 let currentSpaceId = null;
 let currentHomeView = 'dms';
+let isLoadingHistory = false;
+let canLoadMore = true;
 
 const loginScreen = document.getElementById('login-screen');
 const chatScreen = document.getElementById('chat-screen');
+const loadingScreen = document.getElementById('loading-screen');
 const loginForm = document.getElementById('login-form');
 const loginStatus = document.getElementById('login-status');
 const roomsList = document.getElementById('rooms-list');
@@ -41,10 +44,13 @@ window.addEventListener('DOMContentLoaded', () => {
   const savedHomeserver = localStorage.getItem('matrix_homeserver');
 
   if (savedToken && savedUserId && savedHomeserver) {
-    console.log('Found saved session, attempting auto-login...');
+    console.log('Found saved session, auto-logging in...');
+    loginScreen.classList.remove('active');
+    loadingScreen.classList.add('active');
     autoLogin(savedHomeserver, savedToken, savedUserId);
   } else {
     console.log('No saved session found');
+    loginScreen.classList.add('active');
   }
 });
 
@@ -56,12 +62,12 @@ async function autoLogin(homeserver, accessToken, userId) {
       userId: userId
     });
     await startMatrixClient();
-    loginScreen.classList.remove('active');
-    chatScreen.classList.add('active');
     console.log('Auto-login successful!');
   } catch (error) {
     console.error('Auto-login failed:', error);
     clearSession();
+    loadingScreen.classList.remove('active');
+    chatScreen.classList.remove('active');
     loginScreen.classList.add('active');
   }
 }
@@ -108,7 +114,7 @@ loginForm.addEventListener('submit', async (e) => {
 
     await startMatrixClient();
     loginScreen.classList.remove('active');
-    chatScreen.classList.add('active');
+    loadingScreen.classList.add('active');
 
   } catch (error) {
     console.error('Login error:', error);
@@ -139,6 +145,9 @@ async function startMatrixClient() {
   if (userTagElement) userTagElement.textContent = userId;
   if (userAvatarElement) userAvatarElement.textContent = userName.charAt(0).toUpperCase();
 
+  roomsList.innerHTML = '<p class="loading">Syncing with server...</p>';
+  messagesContainer.innerHTML = '<div class="empty-state"><p>Loading messages...</p></div>';
+
   matrixClient.once('sync', async (state) => {
     if (state === 'PREPARED') {
       const ownUser = matrixClient.getUser(userId);
@@ -157,6 +166,14 @@ async function startMatrixClient() {
       loadSpaces();
       showHomeNav(true);
       loadHomeView();
+      messagesContainer.innerHTML = '<div class="empty-state"><p>Select a room to start messaging</p></div>';
+      chatScreen.classList.add('active');
+      requestAnimationFrame(() => {
+        loadingScreen.classList.add('fade-out');
+      });
+      setTimeout(() => {
+        loadingScreen.classList.remove('active', 'fade-out');
+      }, 500);
     }
   });
 
@@ -171,22 +188,59 @@ async function startMatrixClient() {
   matrixClient.on('Room.timeline', handleNewMessage);
   matrixClient.on('Room', handleNewRoom);
 
-  await matrixClient.startClient({ initialSyncLimit: 10 });
+  await matrixClient.startClient({ initialSyncLimit: 5 });
 }
 
 async function performLogout() {
   try {
-    await matrixClient.logout();
-    matrixClient.stopClient();
+    if (matrixClient) {
+      matrixClient.stopClient();
+      await matrixClient.logout();
+    }
+    
+    matrixClient = null;
+    currentRoomId = null;
+    currentSpaceId = null;
+    clearSession();
+    
+    roomsList.innerHTML = '';
+    messagesContainer.innerHTML = '';
+    membersList.innerHTML = '';
+    
+    const submitBtn = loginForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Login';
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    if (usernameInput) usernameInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    loginStatus.style.display = 'none';
+    
+    chatScreen.classList.remove('active');
+    loginScreen.classList.add('active');
+    
+    requestAnimationFrame(() => {
+      if (usernameInput) {
+        usernameInput.focus();
+        usernameInput.select();
+      }
+    });
+    
+    console.log('Logout successful');
+  } catch (error) {
+    console.error('Logout error:', error);
     matrixClient = null;
     clearSession();
     chatScreen.classList.remove('active');
     loginScreen.classList.add('active');
-    document.getElementById('password').value = '';
-    loginStatus.style.display = 'none';
-  } catch (error) {
-    console.error('Logout error:', error);
-    alert('Logout failed: ' + error.message);
+    
+    requestAnimationFrame(() => {
+      const usernameInput = document.getElementById('username');
+      if (usernameInput) {
+        usernameInput.focus();
+        usernameInput.select();
+      }
+    });
   }
 }
 
@@ -206,6 +260,16 @@ document.getElementById('nav-rooms')?.addEventListener('click', () => {
   currentHomeView = 'rooms';
   document.querySelectorAll('.home-nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('nav-rooms').classList.add('active');
+  loadHomeView();
+});
+
+document.getElementById('home-server')?.addEventListener('click', () => {
+  currentSpaceId = null;
+  document.querySelectorAll('.server-icon').forEach(i => i.classList.remove('active'));
+  document.getElementById('home-server')?.classList.add('active');
+  const sidebarHeader = document.querySelector('.sidebar-header h2');
+  if (sidebarHeader) sidebarHeader.textContent = 'Home';
+  showHomeNav(true);
   loadHomeView();
 });
 
@@ -331,37 +395,96 @@ function loadRoomsForSpace(spaceId) {
   const childEvents = spaceRoom?.currentState.getStateEvents('m.space.child') || [];
   const spaceChildIds = new Set(childEvents.map(e => e.getStateKey()).filter(Boolean));
 
-  const spaceRooms = allRooms.filter(room => {
-    if (room.isSpaceRoom()) return false;
-    if (spaceChildIds.has(room.roomId)) return true;
-    const localId = room.roomId.split(':')[0];
-    if (spaceChildIds.has(localId)) return true;
-    const parentEvents = room.currentState.getStateEvents('m.space.parent') || [];
-    if (parentEvents.some(e => e.getStateKey() === spaceId)) return true;
+  const subSpaces = [];
+  const directRooms = [];
 
-    return false;
+  allRooms.forEach(room => {
+    const roomId = room.roomId;
+    const localId = roomId.split(':')[0];
+    
+    const isChild = spaceChildIds.has(roomId) || spaceChildIds.has(localId);
+    
+    if (!isChild) {
+      const parentEvents = room.currentState.getStateEvents('m.space.parent') || [];
+      if (!parentEvents.some(e => e.getStateKey() === spaceId)) return;
+    }
+    
+    if (room.isSpaceRoom()) {
+      subSpaces.push(room);
+    } else {
+      directRooms.push(room);
+    }
   });
 
   roomsList.innerHTML = '';
 
-  if (spaceRooms.length === 0) {
+  if (subSpaces.length === 0 && directRooms.length === 0) {
     roomsList.innerHTML = '<p class="loading">No rooms</p>';
     return;
   }
 
-  spaceRooms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  spaceRooms.forEach(room => roomsList.appendChild(createRoomElement(room)));
+  subSpaces.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  subSpaces.forEach(subSpace => {
+    renderSpaceCategory(subSpace, spaceId);
+  });
+
+  if (directRooms.length > 0) {
+    directRooms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    directRooms.forEach(room => roomsList.appendChild(createRoomElement(room)));
+  }
 }
 
-document.getElementById('home-server')?.addEventListener('click', () => {
-  currentSpaceId = null;
-  document.querySelectorAll('.server-icon').forEach(i => i.classList.remove('active'));
-  document.getElementById('home-server')?.classList.add('active');
-  const sidebarHeader = document.querySelector('.sidebar-header h2');
-  if (sidebarHeader) sidebarHeader.textContent = 'Home';
-  showHomeNav(true);
-  loadHomeView();
-});
+function renderSpaceCategory(subSpace, parentSpaceId) {
+  const categoryDiv = document.createElement('div');
+  categoryDiv.className = 'space-category';
+  categoryDiv.dataset.spaceId = subSpace.roomId;
+  
+  const isExpanded = localStorage.getItem(`space-${subSpace.roomId}-expanded`) !== 'false';
+  
+  categoryDiv.innerHTML = `
+    <div class="space-category-header">
+      <svg class="space-category-arrow ${isExpanded ? 'expanded' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M9.29 15.88L13.17 12 9.29 8.12c-.39-.39-.39-1.02 0-1.41.39-.39 1.02-.39 1.41 0l4.59 4.59c.39.39.39 1.02 0 1.41L10.7 17.3c-.39.39-1.02.39-1.41 0-.38-.39-.39-1.03 0-1.42z"/>
+      </svg>
+      <span class="space-category-name">${escapeHtml(subSpace.name || 'Unnamed Space')}</span>
+    </div>
+    <div class="space-category-rooms ${isExpanded ? 'expanded' : ''}"></div>
+  `;
+  
+  roomsList.appendChild(categoryDiv);
+  
+  const header = categoryDiv.querySelector('.space-category-header');
+  const arrow = categoryDiv.querySelector('.space-category-arrow');
+  const roomsContainer = categoryDiv.querySelector('.space-category-rooms');
+  
+  header.addEventListener('click', () => {
+    const isNowExpanded = !arrow.classList.contains('expanded');
+    arrow.classList.toggle('expanded');
+    roomsContainer.classList.toggle('expanded');
+    localStorage.setItem(`space-${subSpace.roomId}-expanded`, isNowExpanded);
+  });
+  
+  const allRooms = matrixClient.getRooms();
+  const subSpaceChildEvents = subSpace.currentState.getStateEvents('m.space.child') || [];
+  const subSpaceChildIds = new Set(subSpaceChildEvents.map(e => e.getStateKey()).filter(Boolean));
+  
+  const categoryRooms = allRooms.filter(room => {
+    if (room.isSpaceRoom()) return false;
+    
+    const roomId = room.roomId;
+    const localId = roomId.split(':')[0];
+    
+    if (subSpaceChildIds.has(roomId) || subSpaceChildIds.has(localId)) return true;
+    
+    const parentEvents = room.currentState.getStateEvents('m.space.parent') || [];
+    return parentEvents.some(e => e.getStateKey() === subSpace.roomId);
+  });
+  
+  categoryRooms.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  categoryRooms.forEach(room => {
+    roomsContainer.appendChild(createRoomElement(room));
+  });
+}
 
 function createRoomElement(room, isDm = false) {
   const roomDiv = document.createElement('div');
@@ -415,6 +538,7 @@ function openRoom(roomId) {
 
   loadMessages(roomId);
   loadMembers(roomId);
+  loadFullRoomHistory(roomId);
 }
 
 function loadMessages(roomId) {
@@ -425,21 +549,126 @@ function loadMessages(roomId) {
 
   if (timeline.length === 0) {
     messagesContainer.innerHTML = '<div class="empty-state"><p>No messages yet</p></div>';
+    canLoadMore = false;
     return;
   }
 
-  timeline.slice(-50).forEach(event => {
+  const messagesToShow = timeline.slice(-50);
+  messagesToShow.forEach((event, index) => {
     if (event.getType() === 'm.room.message') {
-      messagesContainer.appendChild(createMessageElement(event));
+      const prevEvent = index > 0 ? messagesToShow[index - 1] : null;
+      messagesContainer.appendChild(createMessageElement(event, prevEvent));
     }
   });
 
+  canLoadMore = timeline.length >= 50;
   scrollToBottom();
+  
+  setupInfiniteScroll(roomId);
 }
-function createMessageElement(event) {
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'message';
 
+async function loadFullRoomHistory(roomId) {
+  const room = matrixClient.getRoom(roomId);
+  
+  let loadCount = 0;
+  const maxLoads = 10; 
+
+  while (loadCount < maxLoads) {
+    try {
+      const result = await matrixClient.scrollback(room, 50);
+      
+      if (!result || result === 0) break;
+      
+      loadCount++;
+
+      const timeline = room.timeline;
+      messagesContainer.innerHTML = '';
+      
+      timeline.forEach((event, index) => {
+        if (event.getType() === 'm.room.message') {
+          const prevEvent = index > 0 ? timeline[index - 1] : null;
+          const messageEl = createMessageElement(event, prevEvent);
+          messageEl.dataset.eventId = event.getId();
+          messagesContainer.appendChild(messageEl);
+        }
+      });
+      
+      scrollToBottom();
+      
+    } catch (error) {
+      console.error('Failed to load room history:', error);
+      break;
+    }
+  }
+  
+  canLoadMore = loadCount < maxLoads;
+  setupInfiniteScroll(roomId);
+}
+
+function setupInfiniteScroll(roomId) {
+  messagesContainer.removeEventListener('scroll', handleScroll);
+  
+  function handleScroll() {
+    if (messagesContainer.scrollTop < 100 && !isLoadingHistory && canLoadMore) {
+      loadOlderMessages(roomId);
+    }
+  }
+  
+  messagesContainer.addEventListener('scroll', handleScroll);
+}
+
+async function loadOlderMessages(roomId) {
+  if (isLoadingHistory || !canLoadMore) return;
+  
+  isLoadingHistory = true;
+  const room = matrixClient.getRoom(roomId);
+  
+  const oldScrollHeight = messagesContainer.scrollHeight;
+  
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'loading-history';
+  loadingDiv.textContent = 'Loading older messages...';
+  messagesContainer.insertBefore(loadingDiv, messagesContainer.firstChild);
+  
+  try {
+    await matrixClient.scrollback(room, 20);
+    
+    loadingDiv.remove();
+    
+    const timeline = room.timeline;
+    const oldestDisplayed = messagesContainer.querySelector('.message')?.dataset?.eventId;
+    
+    let startIndex = 0;
+    if (oldestDisplayed) {
+      startIndex = timeline.findIndex(e => e.getId() === oldestDisplayed);
+      if (startIndex === -1) startIndex = 0;
+    }
+    
+    const olderEvents = timeline.slice(Math.max(0, startIndex - 20), startIndex);
+    olderEvents.reverse().forEach((event, index) => {
+      if (event.getType() === 'm.room.message') {
+        const prevEvent = index > 0 ? olderEvents[index - 1] : null;
+        const messageEl = createMessageElement(event, prevEvent);
+        messageEl.dataset.eventId = event.getId();
+        messagesContainer.insertBefore(messageEl, messagesContainer.firstChild);
+      }
+    });
+    
+    const newScrollHeight = messagesContainer.scrollHeight;
+    messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
+    canLoadMore = startIndex > 20;
+    
+  } catch (error) {
+    console.error('Failed to load older messages:', error);
+    loadingDiv.remove();
+  }
+  
+  isLoadingHistory = false;
+}
+
+function createMessageElement(event, prevEvent = null) {
+  const messageDiv = document.createElement('div');
+  
   const sender = event.getSender();
   const content = event.getContent();
   const timestamp = new Date(event.getDate());
@@ -453,17 +682,30 @@ function createMessageElement(event) {
   const senderName = getSenderDisplayName(sender);
   const avatarLetter = senderName.charAt(0).toUpperCase();
 
-  const room = matrixClient.getRoom(currentRoomId);
-  const senderMember = room?.getMember(sender);
-  const senderAvatarMxc = senderMember?.getMxcAvatarUrl();
-  const senderAvatarUrl = mxcToUrl(senderAvatarMxc);
+  const shouldGroup = prevEvent && 
+    prevEvent.getSender() === sender &&
+    prevEvent.getType() === 'm.room.message' &&
+    (timestamp - new Date(prevEvent.getDate())) < 5 * 60 * 1000;
 
-  const avatarHtml = senderAvatarUrl
-    ? `<img src="${senderAvatarUrl}" alt="${avatarLetter}"
-            style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
-            onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
-       <div class="avatar-fallback" style="display:none;">${avatarLetter}</div>`
-    : `<div class="avatar-fallback">${avatarLetter}</div>`;
+  if (shouldGroup) {
+    messageDiv.className = 'message message-grouped';
+  } else {
+    messageDiv.className = 'message';
+    
+    const room = matrixClient.getRoom(currentRoomId);
+    const senderMember = room?.getMember(sender);
+    const senderAvatarMxc = senderMember?.getMxcAvatarUrl();
+    const senderAvatarUrl = mxcToUrl(senderAvatarMxc);
+
+    const avatarHtml = senderAvatarUrl
+      ? `<img src="${senderAvatarUrl}" alt="${avatarLetter}"
+              style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+              onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
+         <div class="avatar-fallback" style="display:none;">${avatarLetter}</div>`
+      : `<div class="avatar-fallback">${avatarLetter}</div>`;
+
+    messageDiv.innerHTML = `<div class="message-avatar">${avatarHtml}</div>`;
+  }
 
   let messageContent = '';
   if (content.msgtype === 'm.image') {
@@ -484,16 +726,39 @@ function createMessageElement(event) {
     messageContent = `<div class="message-content">${escapeHtml(content.body || '')}</div>`;
   }
 
-  messageDiv.innerHTML = `
-    <div class="message-avatar">${avatarHtml}</div>
-    <div class="message-header">
-      <span class="message-sender">${escapeHtml(senderName)}</span>
-      <span class="message-time">${timeString}</span>
-    </div>
-    ${messageContent}
-  `;
+  if (shouldGroup) {
+    messageDiv.innerHTML += `
+      <div class="message-grouped-content">
+        <span class="message-time-hover">${timeString}</span>
+        ${messageContent}
+      </div>
+    `;
+  } else {
+    messageDiv.innerHTML += `
+      <div class="message-header">
+        <span class="message-sender">${escapeHtml(senderName)}</span>
+        <span class="message-time">${timeString}</span>
+      </div>
+      ${messageContent}
+    `;
+  }
 
   return messageDiv;
+}
+
+function getSenderDisplayName(userId) {
+  if (!currentRoomId) return userId;
+  const room = matrixClient.getRoom(currentRoomId);
+  const member = room?.getMember(userId);
+  return member?.name || userId.split(':')[0].substring(1);
+}
+
+function handleNewMessage(event, room, toStartOfTimeline) {
+  if (toStartOfTimeline) return;
+  if (room.roomId !== currentRoomId) return;
+  if (event.getType() !== 'm.room.message') return;
+  messagesContainer.appendChild(createMessageElement(event));
+  scrollToBottom();
 }
 
 document.addEventListener('click', (e) => {
@@ -566,21 +831,6 @@ fileInput.addEventListener('change', async (e) => {
   }
 });
 
-function getSenderDisplayName(userId) {
-  if (!currentRoomId) return userId;
-  const room = matrixClient.getRoom(currentRoomId);
-  const member = room?.getMember(userId);
-  return member?.name || userId.split(':')[0].substring(1);
-}
-
-function handleNewMessage(event, room, toStartOfTimeline) {
-  if (toStartOfTimeline) return;
-  if (room.roomId !== currentRoomId) return;
-  if (event.getType() !== 'm.room.message') return;
-  messagesContainer.appendChild(createMessageElement(event));
-  scrollToBottom();
-}
-
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const messageText = messageInput.value.trim();
@@ -599,12 +849,6 @@ messageForm.addEventListener('submit', async (e) => {
   }
 });
 
-logoutBtn.addEventListener('click', async () => {
-  if (confirm('leaving so soon?')) {
-    await performLogout();
-  }
-});
-
 function scrollToBottom() {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
@@ -614,6 +858,7 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
 toggleMembersBtn.addEventListener('click', () => {
   const isVisible = membersSidebar.style.display !== 'none';
   membersSidebar.style.display = isVisible ? 'none' : 'flex';
