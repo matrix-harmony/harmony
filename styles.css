@@ -715,6 +715,38 @@ body {
   flex-direction: column;
 }
 
+.typing-indicator {
+  height: 20px;
+  padding: 0 16px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #b9bbbe;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b9bbbe;
+  animation: typingPulse 1.4s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
 .empty-state {
   display: flex;
   justify-content: center;
@@ -930,7 +962,7 @@ body {
 }
 
 .message-input-container {
-  padding: 0 16px 24px 16px;
+  padding: 0 16px 3px 16px;
   background: #36393f;
 }
 

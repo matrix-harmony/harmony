@@ -28,7 +28,7 @@ async function startClient(credentials) {
 
   state.client.once('sync', async syncState => {
     if (syncState !== 'PREPARED') return;
-
+    require('./typing').init();
     const ownUser = state.client.getUser(userId);
     if (ownUser?.avatarUrl) {
       const url = mxcToUrl(ownUser.avatarUrl);
@@ -57,7 +57,7 @@ async function startClient(credentials) {
 
   state.client.on('Room.timeline', handleIncoming);
   state.client.on('Room', handleNewRoom);
-
+  
   await state.client.startClient({ initialSyncLimit: 5 });
 }
 
