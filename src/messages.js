@@ -7,8 +7,14 @@ const container = document.getElementById('messages-container');
 const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'p', 'span', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'strong', 'u', 'em', 'del', 'code', 'br']);
 
 function sanitiseHtml(html) {
+  const blocks = [];
+  const protected_html = html.replace(/<pre[^>]*>[\s\S]*?<\/pre>/gi, match => {
+    blocks.push(match);
+    return `__CODEBLOCK_${blocks.length - 1}__`;
+  });
+
   const tmp = document.createElement('div');
-  tmp.innerHTML = html;
+  tmp.innerHTML = protected_html;
 
   function clean(node) {
     for (const child of [...node.childNodes]) {
@@ -17,33 +23,46 @@ function sanitiseHtml(html) {
 
       const tag = child.tagName.toLowerCase();
       if (!ALLOWED_TAGS.has(tag)) {
-
         child.replaceWith(document.createTextNode(child.textContent));
         continue;
       }
 
-      const keep = tag === 'a' ? ['href', 'data-mention', 'target', 'rel'] : [];
+      const keep = tag === 'a' ? ['href', 'data-mention', 'target', 'rel']
+                 : tag === 'code' ? ['class']
+                 : [];
       for (const attr of [...child.attributes]) {
         if (!keep.includes(attr.name)) child.removeAttribute(attr.name);
       }
 
-      if (tag === 'a' && child.dataset.mention) {
-        child.removeAttribute('href');
-      }
+      if (tag === 'a' && child.dataset.mention) child.removeAttribute('href');
 
       clean(child);
     }
   }
 
   clean(tmp);
-  return tmp.innerHTML;
-}
 
+  let result = tmp.innerHTML;
+  blocks.forEach((block, i) => {
+    result = result.replace(`__CODEBLOCK_${i}__`, block);
+  });
+
+  return result;
+}
 function renderBody(content) {
+  let html;
   if (content.format === 'org.matrix.custom.html' && content.formatted_body) {
-    return sanitiseHtml(content.formatted_body);
+    html = sanitiseHtml(content.formatted_body);
+  } else {
+    html = linkify(content.body || '');
   }
-  return linkify(content.body || '');
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  tmp.querySelectorAll('pre code').forEach(block => {
+    hljs.highlightElement(block);
+  });
+  return tmp.innerHTML;
 }
 
 function getSenderName(userId) {

@@ -69,8 +69,13 @@ function makeMemberEl(member) {
     return i > 0 ? raw.slice(0, i).trim() : raw;
   })();
 
-  if (member.userId === state.client.getUserId()) el.classList.add('online');
-
+  const presence = state.client.getUser(member.userId)?.presence;
+  if (member.userId === state.client.getUserId() || presence === 'online') {
+    el.classList.add('online');
+  } else if (presence === 'unavailable') {
+    el.classList.add('idle');
+  }
+  
   const avatarEl = makeAvatar(mxcToUrl(member.getMxcAvatarUrl()), name[0].toUpperCase(), 'member-avatar');
 
   const info = document.createElement('div');

@@ -30,6 +30,15 @@ function showUserProfile(member, anchor) {
     banner.style.background = '#5865f2';
   }
 
+  const badge = document.getElementById('profile-status-badge');
+  if (badge) {
+    const presence = state.client.getUser(member.userId)?.presence;
+    badge.className = 'profile-status-badge';
+    if (presence === 'online') badge.classList.add('online');
+    else if (presence === 'unavailable') badge.classList.add('idle');
+    else badge.classList.add('offline');
+  }
+
   document.querySelectorAll('.member-item').forEach(m => m.classList.remove('profile-open'));
   anchor.closest?.('.member-item')?.classList.add('profile-open');
 
@@ -39,7 +48,6 @@ function showUserProfile(member, anchor) {
 
 function positionPopup(anchor) {
   const content = popup.querySelector('.profile-popup-content');
-  // need a frame for dimensions to be available after display change
   requestAnimationFrame(() => {
     const a = anchor.getBoundingClientRect();
     const p = content.getBoundingClientRect();

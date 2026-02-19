@@ -817,19 +817,18 @@ body {
 }
 
 .message-content pre {
-  background: #2b2d31;
   border: 1px solid #1e1f22;
   border-radius: 4px;
-  padding: 8px 12px;
   margin: 4px 0;
   overflow-x: auto;
 }
 
 .message-content pre code {
-  background: none;
   border: none;
-  padding: 0;
+  padding: 8px 12px;
   font-size: 13px;
+  border-radius: 4px;
+  display: block;
 }
 
 .message-content h1 { font-size: 22px; margin: 6px 0 0; }
@@ -1161,6 +1160,33 @@ body {
   color: #fff;
 }
 
+.profile-status-badge {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 4px solid #18191c;
+  bottom: 0;
+  right: 0;
+  display: none;
+}
+
+.profile-status-badge.online {
+  display: block;
+  background: #3ba55d;
+}
+
+.profile-status-badge.idle {
+  display: block;
+  background: #faa81a;
+}
+
+.profile-status-badge.offline {
+  display: block;
+  background: #72767d;
+  border: 4px solid #18191c;
+}
+
 .member-item {
   padding: 1px 8px;
   display: flex;
@@ -1179,6 +1205,11 @@ body {
 
 .member-item.profile-open {
   background: rgba(79, 84, 92, 0.6);
+}
+
+.member-item.idle .member-avatar::after {
+  display: block;
+  background: #faa81a;
 }
 
 .member-avatar {

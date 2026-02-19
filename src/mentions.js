@@ -204,6 +204,13 @@ function buildBody(text) {
 
 function applyMarkdown(text) {
   let s = escapeHtml(text);
+  const blocks = [];
+  s = s.replace(/```[\s\S]*?```/g, match => {
+    const lang = match.match(/```(\w+)?/)?.[1] || '';
+    const code = match.replace(/```\w*\n?/, '').replace(/```$/, '');
+    blocks.push(`<pre><code class="language-${lang}">${code}</code></pre>`);
+    return `CODEBLOCK${blocks.length - 1}END`;
+  });
   s = s.replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>');
   s = s.replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>');
   s = s.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
@@ -213,9 +220,12 @@ function applyMarkdown(text) {
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/__(.+?)__/g, '<u>$1</u>');
   s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  s = s.replace(/~~(.+?)~~/, '<del>$1</del>');
+  s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
   s = s.replace(/`(.+?)`/g, '<code>$1</code>');
   s = s.replace(/\n/g, '<br>');
+  blocks.forEach((block, i) => {
+  s = s.replace(`CODEBLOCK${i}END`, block);
+});
   return s;
 }
 
