@@ -179,32 +179,20 @@ function getMembersSorted() {
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 }
 
-function buildMentionBody(text) {
-  if (!resolvedMentions.size) return null;
-
+function buildBody(text) {
   const offsets = [...resolvedMentions.keys()].sort((a, b) => a - b);
-
-  let formatted = '';
-  let cursor = 0;
-  let hit = false;
-
+  let formatted = applyMarkdown(text);
+  
   for (const offset of offsets) {
     const { member } = resolvedMentions.get(offset);
-    const tag = `@${member.name}`;
-
-    if (text.slice(offset, offset + tag.length) !== tag) continue;
-
-    formatted += escapeHtml(text.slice(cursor, offset));
-    formatted += `<a href="https://matrix.to/#/${encodeURIComponent(member.userId)}" data-mention="${escapeHtml(member.userId)}">@${escapeHtml(member.name)}</a>`;
-    cursor = offset + tag.length;
-    hit = true;
+    const tag = escapeHtml(`@${member.name}`);
+    formatted = formatted.replace(
+      tag,
+      `<a href="https://matrix.to/#/${encodeURIComponent(member.userId)}" data-mention="${escapeHtml(member.userId)}">@${escapeHtml(member.name)}</a>`
+    );
   }
 
   resolvedMentions.clear();
-
-  if (!hit) return null;
-
-  formatted += escapeHtml(text.slice(cursor));
 
   return {
     msgtype: 'm.text',
@@ -214,6 +202,23 @@ function buildMentionBody(text) {
   };
 }
 
+function applyMarkdown(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>');
+  s = s.replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>');
+  s = s.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+  s = s.replace(/^&gt;\s+(.+)$/gm, '<blockquote>$1</blockquote>');
+  s = s.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
+  s = s.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__(.+?)__/g, '<u>$1</u>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/~~(.+?)~~/, '<del>$1</del>');
+  s = s.replace(/`(.+?)`/g, '<code>$1</code>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
 function clearMentions() { resolvedMentions.clear(); }
 
-module.exports = { buildMentionBody, clearMentions };
+module.exports = { buildBody, clearMentions, applyMarkdown };

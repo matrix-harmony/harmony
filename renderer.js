@@ -3,7 +3,7 @@ const { mxcToUrl, scrollToBottom } = require('./src/utils');
 const { login, getSavedSession, normalizeHomeserver, showStatus } = require('./src/auth');
 const { startClient } = require('./src/client');
 const { buildMessageEl } = require('./src/messages');
-const { buildMentionBody, clearMentions } = require('./src/mentions');
+const { buildBody, clearMentions } = require('./src/mentions');
 
 window.addEventListener('DOMContentLoaded', () => {
   const session = getSavedSession();
@@ -46,6 +46,18 @@ const messageForm = document.getElementById('message-form');
 const messageInput = document.getElementById('message-input');
 const messagesContainer = document.getElementById('messages-container');
 
+messageInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    messageForm.dispatchEvent(new Event('submit'));
+  }
+});
+
+messageInput.addEventListener('input', () => {
+  messageInput.style.height = 'auto';
+  messageInput.style.height = messageInput.scrollHeight + 'px';
+});
+
 messageForm.addEventListener('submit', async e => {
   e.preventDefault();
   const text = messageInput.value.trim();
@@ -69,8 +81,10 @@ messageForm.addEventListener('submit', async e => {
   scrollToBottom();
 
   try {
-    const mentionMsg = buildMentionBody(text);
-    await state.client.sendMessage(state.roomId, mentionMsg || { msgtype: 'm.text', body: text });
+    const msg = buildBody(text);
+    await state.client.sendMessage(state.roomId, msg);
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
     messagesContainer.querySelector(`[data-temp-id="${tempId}"]`)?.remove();
     clearMentions();
   } catch {

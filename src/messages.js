@@ -4,7 +4,7 @@ const { showUserProfile } = require('./profile');
 
 const container = document.getElementById('messages-container');
 
-const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'p', 'span']);
+const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'p', 'span', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'strong', 'u', 'em', 'del', 'code', 'br']);
 
 function sanitiseHtml(html) {
   const tmp = document.createElement('div');
@@ -17,6 +17,7 @@ function sanitiseHtml(html) {
 
       const tag = child.tagName.toLowerCase();
       if (!ALLOWED_TAGS.has(tag)) {
+
         child.replaceWith(document.createTextNode(child.textContent));
         continue;
       }
@@ -144,7 +145,7 @@ function loadMessages(roomId) {
       container.appendChild(buildMessageEl(ev, i > 0 ? arr[i - 1] : null));
   });
 
-  state.canLoadMore = timeline.length >= 50;
+  state.canLoadMore = true;
   scrollToBottom();
   setupInfiniteScroll(roomId);
 }
@@ -159,14 +160,16 @@ async function loadFullHistory(roomId) {
       const result = await state.client.scrollback(room, 50);
       if (!result || result === 0) break;
       loads++;
-      if (state.roomId !== roomId) return;
-      rebuildMessages(room.timeline);
-      scrollToBottom();
     } catch {
       break;
     }
   }
 
+  if (state.roomId !== roomId) return;
+
+  const prevScroll = container.scrollHeight - container.scrollTop;
+  rebuildMessages(room.timeline);
+  container.scrollTop = container.scrollHeight - prevScroll;
   state.canLoadMore = loads < 10;
   setupInfiniteScroll(roomId);
 }
@@ -241,6 +244,7 @@ function handleIncoming(event, room, toStart) {
 }
 
 document.addEventListener('click', e => {
+
   if (e.target.closest('.message-avatar') || e.target.classList.contains('message-sender')) {
     const msg = e.target.closest('.message');
     if (!msg) return;

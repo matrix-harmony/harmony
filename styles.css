@@ -791,9 +791,69 @@ body {
 }
 
 .message-link {
-  color: #00aff4;
+  color: #00a8fc;
   text-decoration: none;
   word-break: break-all;
+}
+
+.message-content a:not([data-mention]) {
+  color: #00a8fc;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.message-content a:not([data-mention]):hover {
+  text-decoration: underline;
+}
+
+.message-content code {
+  background: #2b2d31;
+  border: 1px solid #1e1f22;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 14px;
+  color: #e3e5e8;
+}
+
+.message-content pre {
+  background: #2b2d31;
+  border: 1px solid #1e1f22;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  overflow-x: auto;
+}
+
+.message-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.message-content h1 { font-size: 22px; margin: 6px 0 0; }
+.message-content h2 { font-size: 18px; margin: 4px 0 0; }
+.message-content h3 { font-size: 15px; margin: 2px 0 0; }
+
+.message-content ul,
+.message-content ol {
+  padding-left: 20px;
+  margin: 8px 0 0;
+}
+
+.message-content blockquote {
+  border-left: 3px solid #4f545c;
+  margin: 6px 0;
+  padding-left: 10px;
+  color: #b9bbbe;
+}
+
+.message-content blockquote {
+  border-left: 3px solid #4f545c;
+  margin: 2px 0;
+  padding-left: 10px;
+  color: #b9bbbe;
 }
 
 .message-link:hover {
@@ -879,10 +939,10 @@ body {
   display: flex;
   background: #40444b;
   border-radius: 8px;
-  padding: 0 8px;
+  padding: 4px 8px;
   width: 100%;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .attach-btn {
@@ -920,6 +980,10 @@ body {
   width: 100%;
   min-width: 0;
   font-family: 'Rubik', sans-serif;
+  resize: none;
+  overflow-y: hidden;
+  max-height: 200px;
+  line-height: 1.375;
 }
 
 #message-input::placeholder {
