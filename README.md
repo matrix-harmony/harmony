@@ -1,7 +1,9 @@
+# Harmony is currently in very early Alpha and is missing basic features. Feel free to contribute
+
 # Harmony
 A matrix client based on the look of classic Discord.
 
-## Running Harmony Client (for testing purposes)
+# Running Harmony Client (for testing purposes)
 Install the required dependencies
 ```
 npm install
