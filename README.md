@@ -1,11 +1,13 @@
 # Harmony
-A matrix client based on the look of classic discord and sponsored by didi.party homeserver, Curreently in development.
+A matrix client based on the look of classic Discord.
 
-install the required thingys
+# Running Harmony Client (for testing purposes)
+Install the required dependencies
 ```
 npm install
 ```
-and then run
+Run Harmony
 ```
 npm start
 ```
+Builds will be provided upon Alpha Release
