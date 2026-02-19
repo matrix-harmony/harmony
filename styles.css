@@ -994,12 +994,12 @@ body {
   background: transparent;
   display: none;
   z-index: 10000;
-  pointer-events: none; /* Keep this - allows clicks to pass through */
+  pointer-events: none;
 }
 
 .profile-popup.active {
   display: block;
-  pointer-events: none; /* Changed from auto - overlay stays non-blocking */
+  pointer-events: none;
 }
 
 .profile-popup-content {
@@ -1012,7 +1012,7 @@ body {
   overflow: hidden;
   box-shadow: 0 0px 8px rgba(0, 0, 0, 0.8);
   animation: popIn 0.02s ease;
-  pointer-events: auto; /* Only the popup content catches clicks */
+  pointer-events: auto;
 }
 
 .profile-banner {
@@ -1200,7 +1200,6 @@ body {
   object-fit: contain;
 }
 
-/* avatar images fill their container */
 .member-avatar img,
 .dm-avatar img,
 .message-avatar img {
@@ -1227,4 +1226,121 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #1a1c1f;
+}
+
+.mention-picker {
+  position: fixed;
+  background: #2f3136;
+  border: 1px solid #1e1f22;
+  border-radius: 6px;
+  box-shadow: 0 0px 14px rgba(0,0,0,0.5);
+  z-index: 2000;
+  overflow: hidden;
+  padding-bottom: 8px;
+}
+
+.mention-picker-header {
+  padding: 10px 12px 6px;
+  font-size: 11px;
+  font-weight: 300;
+  color: #72767d;
+  letter-spacing: 0.6px;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  margin: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  gap: 8px;
+}
+
+.mention-item:hover,
+.mention-item.selected {
+  background: #404249;
+}
+
+.mention-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mention-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #5865f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.mention-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.mention-name {
+  color: #f2f3f5;
+  font-size: 15px;
+  font-weight: 300;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mention-id {
+  color: #72767d;
+  font-size: 13px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.message-mention {
+  background: rgba(250, 168, 26, 0.05);
+  border-left: 2px solid #faa81a;
+  padding-left: 14px;
+}
+
+.message-mention:hover {
+  background: rgba(250, 168, 26, 0.08);
+}
+
+.message-content a[data-mention] {
+  color: #c9cdfb;
+  background: rgba(88, 101, 242, 0.2);
+  border-radius: 3px;
+  padding: 0 3px;
+  text-decoration: none;
+  cursor: pointer;
+  pointer-events: auto;
+  font-weight: 500;
+}
+
+.message-content a[data-mention]:hover {
+  background: rgba(88, 101, 242, 0.4);
+  color: #fff;
+}
+
+.message-mention .message-content a[data-mention] {
+  color: #fde68a;
+  background: rgba(250, 168, 26, 0.25);
+}
+
+.message-mention .message-content a[data-mention]:hover {
+  background: rgba(250, 168, 26, 0.45);
 }

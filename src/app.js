@@ -36,7 +36,6 @@ async function selectRoom(roomId) {
   });
 }
 
-// Global Image Overlay Handler
 window.openImage = (url) => {
   const overlay = document.createElement('div');
   overlay.className = 'image-overlay';
@@ -45,7 +44,6 @@ window.openImage = (url) => {
   document.body.appendChild(overlay);
 };
 
-// Event Wiring
 document.getElementById('login-form').onsubmit = async (e) => {
   e.preventDefault();
   await matrix.login(document.getElementById('homeserver').value, document.getElementById('username').value, document.getElementById('password').value);

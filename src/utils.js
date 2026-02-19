@@ -25,7 +25,6 @@ function linkify(text) {
   );
 }
 
-// builds an avatar element — img with letter fallback, or just a letter div
 function makeAvatar(mxcUrl, letter, extraClass = '') {
   const el = document.createElement('div');
   if (extraClass) el.className = extraClass;

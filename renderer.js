@@ -3,8 +3,7 @@ const { mxcToUrl, scrollToBottom } = require('./src/utils');
 const { login, getSavedSession, normalizeHomeserver, showStatus } = require('./src/auth');
 const { startClient } = require('./src/client');
 const { buildMessageEl } = require('./src/messages');
-
-// ---- boot ----
+const { buildMentionBody, clearMentions } = require('./src/mentions');
 
 window.addEventListener('DOMContentLoaded', () => {
   const session = getSavedSession();
@@ -20,8 +19,6 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('login-screen').classList.add('active');
   }
 });
-
-// ---- login form ----
 
 document.getElementById('login-form').addEventListener('submit', async e => {
   e.preventDefault();
@@ -44,8 +41,6 @@ document.getElementById('login-form').addEventListener('submit', async e => {
     btn.disabled = false;
   }
 });
-
-// ---- message form ----
 
 const messageForm = document.getElementById('message-form');
 const messageInput = document.getElementById('message-input');
@@ -74,9 +69,12 @@ messageForm.addEventListener('submit', async e => {
   scrollToBottom();
 
   try {
-    await state.client.sendMessage(state.roomId, { msgtype: 'm.text', body: text });
+    const mentionMsg = buildMentionBody(text);
+    await state.client.sendMessage(state.roomId, mentionMsg || { msgtype: 'm.text', body: text });
     messagesContainer.querySelector(`[data-temp-id="${tempId}"]`)?.remove();
+    clearMentions();
   } catch {
+    clearMentions();
     const el = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
     if (!el) return;
     el.style.opacity = '1';
@@ -92,8 +90,6 @@ messageForm.addEventListener('submit', async e => {
     el.appendChild(retry);
   }
 });
-
-// ---- image upload ----
 
 const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');

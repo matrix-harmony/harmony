@@ -4,7 +4,46 @@ const { showUserProfile } = require('./profile');
 
 const container = document.getElementById('messages-container');
 
-// ---- rendering ----
+const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'p', 'span']);
+
+function sanitiseHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  function clean(node) {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === Node.TEXT_NODE) continue;
+      if (child.nodeType !== Node.ELEMENT_NODE) { child.remove(); continue; }
+
+      const tag = child.tagName.toLowerCase();
+      if (!ALLOWED_TAGS.has(tag)) {
+        child.replaceWith(document.createTextNode(child.textContent));
+        continue;
+      }
+
+      const keep = tag === 'a' ? ['href', 'data-mention', 'target', 'rel'] : [];
+      for (const attr of [...child.attributes]) {
+        if (!keep.includes(attr.name)) child.removeAttribute(attr.name);
+      }
+
+      if (tag === 'a' && child.dataset.mention) {
+        child.removeAttribute('href');
+      }
+
+      clean(child);
+    }
+  }
+
+  clean(tmp);
+  return tmp.innerHTML;
+}
+
+function renderBody(content) {
+  if (content.format === 'org.matrix.custom.html' && content.formatted_body) {
+    return sanitiseHtml(content.formatted_body);
+  }
+  return linkify(content.body || '');
+}
 
 function getSenderName(userId) {
   if (!state.roomId) return userId.split(':')[0].slice(1);
@@ -38,8 +77,22 @@ function buildMessageEl(event, prevEvent = null) {
     if (last) grouped = isGrouped(sender, ts.getTime(), last);
   }
 
+  const myId = state.client.getUserId();
+  const bodyText = content.body || '';
+  const myName = (() => {
+    const member = state.client.getRoom(state.roomId)?.getMember(myId);
+    const raw = member?.name || myId.split(':')[0].slice(1);
+    const i = raw.indexOf('(');
+    return i > 0 ? raw.slice(0, i).trim() : raw;
+  })();
+  const isMentioned = sender !== myId && (
+    bodyText.includes(myId) ||
+    (myName && bodyText.toLowerCase().includes('@' + myName.toLowerCase()))
+  );
+
   const el = document.createElement('div');
   el.className = grouped ? 'message message-grouped' : 'message';
+  if (isMentioned) el.classList.add('message-mention');
   el.dataset.senderId = sender;
   el.dataset.timestamp = ts.getTime();
 
@@ -50,7 +103,7 @@ function buildMessageEl(event, prevEvent = null) {
       ? `<div class="message-image-container"><img src="${url}" alt="${escapeHtml(content.body || 'Image')}" class="message-image" loading="lazy"></div>`
       : `<div class="message-content">[Image]</div>`;
   } else {
-    body = `<div class="message-content">${linkify(content.body || '')}</div>`;
+    body = `<div class="message-content">${renderBody(content)}</div>`;
   }
 
   if (grouped) {
@@ -74,8 +127,6 @@ function buildMessageEl(event, prevEvent = null) {
 
   return el;
 }
-
-// ---- loading ----
 
 function loadMessages(roomId) {
   const room = state.client.getRoom(roomId);
@@ -177,8 +228,6 @@ async function loadOlderMessages(roomId) {
   state.loadingHistory = false;
 }
 
-// ---- incoming events ----
-
 function handleIncoming(event, room, toStart) {
   if (toStart || room.roomId !== state.roomId) return;
   if (event.getType() !== 'm.room.message') return;
@@ -191,10 +240,7 @@ function handleIncoming(event, room, toStart) {
   scrollToBottom();
 }
 
-// ---- click delegation for avatars/senders and image lightbox ----
-
 document.addEventListener('click', e => {
-  // open profile from message
   if (e.target.closest('.message-avatar') || e.target.classList.contains('message-sender')) {
     const msg = e.target.closest('.message');
     if (!msg) return;
@@ -203,7 +249,6 @@ document.addEventListener('click', e => {
     return;
   }
 
-  // lightbox
   if (e.target.classList.contains('message-image')) {
     e.preventDefault();
     const overlay = document.createElement('div');
@@ -216,10 +261,18 @@ document.addEventListener('click', e => {
     return;
   }
 
-  // external links
   if (e.target.classList.contains('message-link')) {
     e.preventDefault();
     require('electron').shell.openExternal(e.target.href);
+    return;
+  }
+
+  if (e.target.closest('a[data-mention]')) {
+    e.preventDefault();
+    const userId = e.target.closest('a[data-mention]').dataset.mention;
+    if (!userId || !state.roomId) return;
+    const member = state.client.getRoom(state.roomId)?.getMember(userId);
+    if (member) showUserProfile(member, e.target);
   }
 });
 
