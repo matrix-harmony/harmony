@@ -90,7 +90,7 @@ function positionPicker() {
 function commitMention(member) {
   const val   = input.value;
   const after = val.slice(input.selectionStart);
-  const insertedText = `@${member.name} `;
+  const insertedText = `@${member.name}`;
 
   input.value = val.slice(0, mentionStart) + insertedText + after;
 

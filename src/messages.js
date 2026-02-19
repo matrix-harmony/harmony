@@ -34,8 +34,15 @@ function sanitiseHtml(html) {
         if (!keep.includes(attr.name)) child.removeAttribute(attr.name);
       }
 
-      if (tag === 'a' && child.dataset.mention) child.removeAttribute('href');
-
+      if (tag === 'a') {
+        const href = child.getAttribute('href') || '';
+        if (href.startsWith('https://matrix.to/#/@')) {
+          const userId = decodeURIComponent(href.replace('https://matrix.to/#/', ''));
+          child.setAttribute('data-mention', userId);
+        }
+        if (child.dataset.mention) child.removeAttribute('href');
+      }
+      
       clean(child);
     }
   }
