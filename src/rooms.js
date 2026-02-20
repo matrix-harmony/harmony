@@ -4,6 +4,7 @@ const { loadMessages, loadFullHistory } = require('./messages');
 const { loadMembers } = require('./members');
 const { clearTyping, checkCurrentTypers } = require('./typing');
 const { updateReceipts, sendReceipt, clearReceipts } = require('./receipts');
+const { showPinnedMessages, closePinned } = require('./pinned');
 
 const roomsList = document.getElementById('rooms-list');
 
@@ -27,11 +28,20 @@ function setHomeView(view) {
   document.getElementById(`nav-${view}`)?.classList.add('active');
   loadHomeView();
 
-  setTimeout(() => {
-    const firstRoom = document.querySelector('#rooms-list .room-item');
-    if (firstRoom?.dataset.roomId) openRoom(firstRoom.dataset.roomId);
-  }, 0);
+  const lastRoom = state.lastRoomPerSpace['home'];
+  if (lastRoom && state.client?.getRoom(lastRoom)) {
+    openRoom(lastRoom);
+  } else {
+    setTimeout(() => {
+      const firstRoom = document.querySelector('#rooms-list .room-item');
+      if (firstRoom?.dataset.roomId) openRoom(firstRoom.dataset.roomId);
+    }, 0);
+  }
 }
+
+document.getElementById('pinned-btn')?.addEventListener('click', () => {
+  showPinnedMessages();
+});
 
 document.getElementById('home-server')?.addEventListener('click', () => {
   state.spaceId = null;
@@ -267,6 +277,7 @@ function makeCategoryHeader(text) {
 function openRoom(roomId) {
   clearTyping();
   clearReceipts();
+  closePinned();
   state.roomId = roomId;
   state.lastRoomPerSpace[state.spaceId || 'home'] = roomId;
   checkCurrentTypers();
