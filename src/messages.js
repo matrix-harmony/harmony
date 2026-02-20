@@ -42,7 +42,7 @@ function sanitiseHtml(html) {
         }
         if (child.dataset.mention) child.removeAttribute('href');
       }
-      
+
       clean(child);
     }
   }
@@ -166,7 +166,7 @@ function loadMessages(roomId) {
     return;
   }
 
-  timeline.slice(-50).forEach((ev, i, arr) => {
+  timeline.slice(-100).forEach((ev, i, arr) => {
     if (ev.getType() === 'm.room.message')
       container.appendChild(buildMessageEl(ev, i > 0 ? arr[i - 1] : null));
   });
@@ -180,7 +180,7 @@ async function loadFullHistory(roomId) {
   const room = state.client.getRoom(roomId);
   let loads = 0;
 
-  while (loads < 10) {
+  while (loads < 3) {
     if (state.roomId !== roomId) return;
     try {
       const result = await state.client.scrollback(room, 50);
@@ -213,8 +213,9 @@ function rebuildMessages(timeline) {
 function setupInfiniteScroll(roomId) {
   container.removeEventListener('scroll', container._scrollHandler);
   container._scrollHandler = () => {
-    if (container.scrollTop < 100 && !state.loadingHistory && state.canLoadMore)
+    if (container.scrollTop < 800 && !state.loadingHistory && state.canLoadMore) {
       loadOlderMessages(roomId);
+    }
   };
   container.addEventListener('scroll', container._scrollHandler);
 }
@@ -226,32 +227,27 @@ async function loadOlderMessages(roomId) {
   const room = state.client.getRoom(roomId);
   const prevHeight = container.scrollHeight;
 
-  const spinner = document.createElement('div');
-  spinner.className = 'loading-history';
-  spinner.textContent = 'Loading older messages...';
-  container.prepend(spinner);
-
   try {
-    await state.client.scrollback(room, 20);
-    spinner.remove();
-
+    const result = await state.client.scrollback(room, 50);
     const timeline = room.timeline;
+
     const oldestId = container.querySelector('.message')?.dataset?.eventId;
     let startIdx = oldestId ? timeline.findIndex(e => e.getId() === oldestId) : 0;
     if (startIdx === -1) startIdx = 0;
 
-    const older = timeline.slice(Math.max(0, startIdx - 20), startIdx).reverse();
-    older.forEach((ev, i, arr) => {
+    const older = timeline.slice(Math.max(0, startIdx - 50), startIdx);
+    [...older].reverse().forEach((ev, i, arr) => {
       if (ev.getType() !== 'm.room.message') return;
-      const el = buildMessageEl(ev, i > 0 ? arr[i - 1] : null);
+      const prevEv = i < arr.length - 1 ? arr[i + 1] : null;
+      const el = buildMessageEl(ev, prevEv);
       el.dataset.eventId = ev.getId();
       container.prepend(el);
     });
 
     container.scrollTop = container.scrollHeight - prevHeight;
-    state.canLoadMore = startIdx > 20;
+    state.canLoadMore = result !== 0;
   } catch {
-    spinner.remove();
+    state.canLoadMore = false;
   }
 
   state.loadingHistory = false;

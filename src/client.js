@@ -4,9 +4,9 @@ const { mxcToUrl } = require('./utils');
 const { logout } = require('./auth');
 const { loadHomeView, loadSpaces, showHomeNav, handleNewRoom } = require('./rooms');
 const { handleIncoming } = require('./messages');
+const { init: initReceipts } = require('./receipts');
 
 function buildClient(credentials) {
-  // auth.js returns {homeserver, token, userId}; normalise to SDK's expected keys
   return sdk.createClient({
     baseUrl: credentials.baseUrl || credentials.homeserver,
     accessToken: credentials.accessToken || credentials.token,
@@ -29,6 +29,7 @@ async function startClient(credentials) {
   state.client.once('sync', async syncState => {
     if (syncState !== 'PREPARED') return;
     require('./typing').init();
+    initReceipts();
     const ownUser = state.client.getUser(userId);
     if (ownUser?.avatarUrl) {
       const url = mxcToUrl(ownUser.avatarUrl);
@@ -55,10 +56,12 @@ async function startClient(credentials) {
     if (confirm('Log out?')) logout();
   });
 
-  state.client.on('Room.timeline', handleIncoming);
+state.client.on('Room.timeline', handleIncoming);
   state.client.on('Room', handleNewRoom);
-  
-  await state.client.startClient({ initialSyncLimit: 5 });
+  await state.client.startClient({ 
+    initialSyncLimit: 100,
+    lazyLoadMembers: true,
+  });
 }
 
 module.exports = { buildClient, startClient };

@@ -715,14 +715,26 @@ body {
   flex-direction: column;
 }
 
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 16px 4px;
+  min-height: 24px;
+}
+
 .typing-indicator {
-  height: 20px;
-  padding: 0 16px 4px;
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
   color: #b9bbbe;
+}
+
+.receipts-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .typing-dots {
@@ -745,6 +757,102 @@ body {
 @keyframes typingPulse {
   0%, 100% { opacity: 0.3; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1.2); }
+}
+
+.receipts-stack {
+  display: flex;
+  flex-direction: row-reverse;
+  cursor: pointer;
+}
+
+.receipt-avatar {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  border: 2px solid #36393f;
+  margin-left: -4px;
+  font-size: 8px;
+  font-weight: 600;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #5865f2;
+  color: #fff;
+}
+
+.receipt-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.receipts-stack {
+  display: flex;
+  flex-direction: row;
+  cursor: pointer;
+  align-items: center;
+  gap: 2px;
+}
+
+.receipt-more {
+  background: #4f545c;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+}
+
+.receipt-popup {
+  background: #2f3136;
+  border: 1px solid #1e1f22;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  z-index: 2000;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.receipt-popup-title {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #72767d;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.receipt-popup-list {
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.receipt-popup-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.receipt-popup-item:hover {
+  background: #404249;
+}
+
+.receipt-popup-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .empty-state {

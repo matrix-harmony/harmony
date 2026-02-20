@@ -2,6 +2,8 @@ const state = require('./state');
 const { mxcToUrl, escapeHtml, makeAvatar } = require('./utils');
 const { loadMessages, loadFullHistory } = require('./messages');
 const { loadMembers } = require('./members');
+const { clearTyping, checkCurrentTypers } = require('./typing');
+const { updateReceipts, sendReceipt } = require('./receipts');
 
 const roomsList = document.getElementById('rooms-list');
 
@@ -228,7 +230,9 @@ function makeCategoryHeader(text) {
 // ---- open a room ----
 
 function openRoom(roomId) {
+  clearTyping();
   state.roomId = roomId;
+  checkCurrentTypers();
   const room = state.client.getRoom(roomId);
   const encrypted = state.client.isRoomEncrypted(roomId);
 
@@ -245,11 +249,12 @@ function openRoom(roomId) {
   loadMessages(roomId);
   loadMembers(roomId);
   loadFullHistory(roomId);
+  sendReceipt();
+  updateReceipts();
 }
 
 function handleNewRoom(room) {
   if (!state.spaceId) loadHomeView();
   loadSpaces();
 }
-
 module.exports = { loadHomeView, loadSpaces, openRoom, showHomeNav, handleNewRoom };
