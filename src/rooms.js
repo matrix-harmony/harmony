@@ -3,7 +3,7 @@ const { mxcToUrl, escapeHtml, makeAvatar } = require('./utils');
 const { loadMessages, loadFullHistory } = require('./messages');
 const { loadMembers } = require('./members');
 const { clearTyping, checkCurrentTypers } = require('./typing');
-const { updateReceipts, sendReceipt } = require('./receipts');
+const { updateReceipts, sendReceipt, clearReceipts } = require('./receipts');
 
 const roomsList = document.getElementById('rooms-list');
 
@@ -11,6 +11,11 @@ const roomsList = document.getElementById('rooms-list');
 
 function showHomeNav(visible) {
   document.getElementById('home-nav')?.classList.toggle('visible', visible);
+  const membersBtn = document.getElementById('members-btn');
+  const pinnedBtn = document.getElementById('pinned-btn');
+  const show = (visible && !state.roomId) ? 'none' : 'flex';
+  if (membersBtn) membersBtn.style.display = show;
+  if (pinnedBtn) pinnedBtn.style.display = show;
 }
 
 document.getElementById('nav-dms')?.addEventListener('click', () => setHomeView('dms'));
@@ -21,15 +26,35 @@ function setHomeView(view) {
   document.querySelectorAll('.home-nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`nav-${view}`)?.classList.add('active');
   loadHomeView();
+
+  setTimeout(() => {
+    const firstRoom = document.querySelector('#rooms-list .room-item');
+    if (firstRoom?.dataset.roomId) openRoom(firstRoom.dataset.roomId);
+  }, 0);
 }
 
 document.getElementById('home-server')?.addEventListener('click', () => {
   state.spaceId = null;
+  state.roomId = null;
+  clearReceipts();
+  clearTyping();
+  document.getElementById('current-room-name').innerHTML = '';
   document.querySelectorAll('.server-icon').forEach(i => i.classList.remove('active'));
   document.getElementById('home-server')?.classList.add('active');
   document.querySelector('.sidebar-header h2').textContent = 'Home';
   showHomeNav(true);
   loadHomeView();
+
+  const lastRoom = state.lastRoomPerSpace['home'];
+  if (lastRoom && state.client.getRoom(lastRoom)) {
+    openRoom(lastRoom);
+  } else {
+    document.getElementById('messages-container').innerHTML =
+      '<div class="empty-state"><p>Select a room to start messaging</p></div>';
+    document.getElementById('message-input-container').style.display = 'none';
+    document.getElementById('members-sidebar').style.display = 'none';
+    document.getElementById('members-btn').style.display = 'none';
+  }
 });
 
 // ---- home view ----
@@ -121,6 +146,16 @@ function switchSpace(spaceId) {
   const name = state.client.getRoom(spaceId)?.name || 'Space';
   document.querySelector('.sidebar-header h2').textContent = name;
   loadSpaceRooms(spaceId);
+
+  const lastRoom = state.lastRoomPerSpace[spaceId];
+  if (lastRoom && state.client.getRoom(lastRoom)) {
+    openRoom(lastRoom);
+  } else {
+    setTimeout(() => {
+      const firstRoom = document.querySelector('#rooms-list .room-item');
+      if (firstRoom?.dataset.roomId) openRoom(firstRoom.dataset.roomId);
+    }, 0);
+  }
 }
 
 function loadSpaceRooms(spaceId) {
@@ -231,10 +266,19 @@ function makeCategoryHeader(text) {
 
 function openRoom(roomId) {
   clearTyping();
+  clearReceipts();
   state.roomId = roomId;
+  state.lastRoomPerSpace[state.spaceId || 'home'] = roomId;
   checkCurrentTypers();
   const room = state.client.getRoom(roomId);
   const encrypted = state.client.isRoomEncrypted(roomId);
+
+  if (!state.spaceId) {
+    showHomeNav(true);
+  } else {
+    showHomeNav(false);
+  }
+  
 
   document.getElementById('current-room-name').innerHTML = `
     <span class="encryption-indicator ${encrypted ? 'encrypted' : 'unencrypted'}"></span>
@@ -242,7 +286,6 @@ function openRoom(roomId) {
 
   document.getElementById('message-input-container').style.display = 'flex';
   document.getElementById('message-input').placeholder = `Message #${room.name || roomId}`;
-
   document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`[data-room-id="${roomId}"]`)?.classList.add('active');
 
@@ -257,4 +300,5 @@ function handleNewRoom(room) {
   if (!state.spaceId) loadHomeView();
   loadSpaces();
 }
+
 module.exports = { loadHomeView, loadSpaces, openRoom, showHomeNav, handleNewRoom };

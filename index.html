@@ -111,7 +111,19 @@
 <div class="main-content">
           <div class="chat-header" id="chat-header">
             <h2 id="current-room-name">Select Room</h2>
-            <div id="member-count" class="member-count"></div>
+            <div class="chat-header-actions">
+              <button class="header-btn" id="pinned-btn" title="Pinned Messages">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                </svg>
+              </button>
+              <button class="header-btn" id="members-btn" title="Members">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+              </button>
+              <div id="member-count" class="member-count"></div>
+            </div>
           </div>
           
           <div class="messages-container" id="messages-container">
@@ -138,7 +150,6 @@
         <div class="members-sidebar" id="members-sidebar" style="display: none;">
           <div class="members-header">
             <p class="members-count">Members</p>
-            <button id="toggle-members" class="btn btn-small">Hide</button>
           </div>
           <div class="members-list" id="members-list">
             <p class="loading">Loading Members..</p>

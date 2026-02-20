@@ -147,6 +147,18 @@ body {
   background: #c03537;
 }
 
+.encryption-notice {
+  text-align: center;
+  color: #eae9e9;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 12px;
+  margin: 8px 16px;
+  background: rgba(250, 168, 26, 0.08);
+  border: 1px solid rgba(250, 168, 26, 0.2);
+  border-radius: 6px;
+}
+
 .encryption-indicator {
   display: inline-block;
   width: 8px;
@@ -699,6 +711,35 @@ body {
   font-weight: 300;
 }
 
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: #b9bbbe;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.header-btn:hover {
+  color: #dcddde;
+  background: rgba(79, 84, 92, 0.32);
+}
+
+.header-btn.active {
+  color: #fff;
+}
+
 .member-count {
   font-size: 12px;
   color: #b9bbbe;
@@ -1001,6 +1042,22 @@ body {
   margin: 2px 0;
   padding-left: 10px;
   color: #b9bbbe;
+}
+
+.message-content .spoiler {
+  background: #202225;
+  color: transparent;
+  border-radius: 3px;
+  padding: 0 3px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  user-select: none;
+}
+
+.message-content .spoiler.revealed {
+  background: #40444b;
+  color: inherit;
+  user-select: text;
 }
 
 .message-link:hover {

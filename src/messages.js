@@ -4,17 +4,11 @@ const { showUserProfile } = require('./profile');
 
 const container = document.getElementById('messages-container');
 
-const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'p', 'span', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'strong', 'u', 'em', 'del', 'code', 'br']);
+const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'span', 'p', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'strong', 'u', 'em', 'del', 'code', 'br']);
 
 function sanitiseHtml(html) {
-  const blocks = [];
-  const protected_html = html.replace(/<pre[^>]*>[\s\S]*?<\/pre>/gi, match => {
-    blocks.push(match);
-    return `__CODEBLOCK_${blocks.length - 1}__`;
-  });
-
   const tmp = document.createElement('div');
-  tmp.innerHTML = protected_html;
+  tmp.innerHTML = html;
 
   function clean(node) {
     for (const child of [...node.childNodes]) {
@@ -29,19 +23,26 @@ function sanitiseHtml(html) {
 
       const keep = tag === 'a' ? ['href', 'data-mention', 'target', 'rel']
                  : tag === 'code' ? ['class']
+                 : tag === 'span' ? ['data-mx-spoiler']
                  : [];
       for (const attr of [...child.attributes]) {
         if (!keep.includes(attr.name)) child.removeAttribute(attr.name);
       }
+
+      if (tag === 'a' && child.dataset.mention) child.removeAttribute('href');
 
       if (tag === 'a') {
         const href = child.getAttribute('href') || '';
         if (href.startsWith('https://matrix.to/#/@')) {
           const userId = decodeURIComponent(href.replace('https://matrix.to/#/', ''));
           child.setAttribute('data-mention', userId);
+          child.removeAttribute('href');
         }
-        if (child.dataset.mention) child.removeAttribute('href');
       }
+
+      tmp.querySelectorAll('span[data-mx-spoiler]').forEach(el => {
+      el.classList.add('spoiler');
+    });
 
       clean(child);
     }
@@ -49,27 +50,20 @@ function sanitiseHtml(html) {
 
   clean(tmp);
 
-  let result = tmp.innerHTML;
-  blocks.forEach((block, i) => {
-    result = result.replace(`__CODEBLOCK_${i}__`, block);
-  });
-
-  return result;
-}
-function renderBody(content) {
-  let html;
-  if (content.format === 'org.matrix.custom.html' && content.formatted_body) {
-    html = sanitiseHtml(content.formatted_body);
-  } else {
-    html = linkify(content.body || '');
-  }
-
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  tmp.querySelectorAll('pre code').forEach(block => {
-    hljs.highlightElement(block);
-  });
   return tmp.innerHTML;
+}
+
+function renderBody(content) {
+  if (content.format === 'org.matrix.custom.html' && content.formatted_body) {
+    const html = sanitiseHtml(content.formatted_body);
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('pre code').forEach(block => {
+      hljs.highlightElement(block);
+    });
+    return tmp.innerHTML;
+  }
+  return linkify(content.body || '');
 }
 
 function getSenderName(userId) {
@@ -155,10 +149,19 @@ function buildMessageEl(event, prevEvent = null) {
   return el;
 }
 
+
 function loadMessages(roomId) {
   const room = state.client.getRoom(roomId);
   const timeline = room.timeline;
   container.innerHTML = '';
+
+  if (state.client.isRoomEncrypted(roomId)) {
+    const notice = document.createElement('div');
+    notice.className = 'encryption-notice';
+    notice.innerHTML = 'Encryption currently not supported. Coming Soon.';
+    container.appendChild(notice);
+    return;
+  }
 
   if (!timeline.length) {
     container.innerHTML = '<div class="empty-state"><p>No messages yet</p></div>';
@@ -177,23 +180,24 @@ function loadMessages(roomId) {
 }
 
 async function loadFullHistory(roomId) {
+  if (state.client.isRoomEncrypted(roomId)) return;
   const room = state.client.getRoom(roomId);
   let loads = 0;
 
-  while (loads < 3) {
-    if (state.roomId !== roomId) return;
-    try {
-      const result = await state.client.scrollback(room, 50);
-      if (!result || result === 0) break;
-      loads++;
-    } catch {
-      break;
-    }
-  }
-
+while (loads < 3) {
   if (state.roomId !== roomId) return;
+  try {
+    const result = await state.client.scrollback(room, 50);
+    if (state.roomId !== roomId) return;
+    if (!result || result === 0) break;
+    loads++;
+  } catch {
+    break;
+  }
+}
 
-  const prevScroll = container.scrollHeight - container.scrollTop;
+if (state.roomId !== roomId) return;
+const prevScroll = container.scrollHeight - container.scrollTop;
   rebuildMessages(room.timeline);
   container.scrollTop = container.scrollHeight - prevScroll;
   state.canLoadMore = loads < 10;
@@ -293,6 +297,11 @@ document.addEventListener('click', e => {
     return;
   }
 
+  if (e.target.classList.contains('spoiler')) {
+  e.target.classList.toggle('revealed');
+  return;
+  }
+
   if (e.target.closest('a[data-mention]')) {
     e.preventDefault();
     const userId = e.target.closest('a[data-mention]').dataset.mention;
@@ -301,5 +310,6 @@ document.addEventListener('click', e => {
     if (member) showUserProfile(member, e.target);
   }
 });
+
 
 module.exports = { loadMessages, loadFullHistory, handleIncoming, buildMessageEl };

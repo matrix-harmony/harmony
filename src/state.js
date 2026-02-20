@@ -9,6 +9,7 @@ const state = {
   canLoadMore: true,
   allMembers: [],
   memberRange: { start: 0, end: 40 },
+  lastRoomPerSpace: {},
 };
 
 module.exports = state;

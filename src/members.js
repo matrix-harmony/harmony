@@ -4,15 +4,14 @@ const { showUserProfile } = require('./profile');
 
 const ITEM_HEIGHT = 42;
 const BUFFER = 10;
-
 const sidebar = document.getElementById('members-sidebar');
 const list = document.getElementById('members-list');
-const toggleBtn = document.getElementById('toggle-members');
 
-toggleBtn?.addEventListener('click', () => {
-  const visible = sidebar.style.display !== 'none';
-  sidebar.style.display = visible ? 'none' : 'flex';
-  toggleBtn.textContent = visible ? 'Show' : 'Hide';
+document.getElementById('members-btn')?.addEventListener('click', () => {
+  const btn = document.getElementById('members-btn');
+  const isHidden = sidebar.style.display === 'none';
+  sidebar.style.display = isHidden ? 'flex' : 'none';
+  btn.classList.toggle('active', isHidden);
 });
 
 function loadMembers(roomId) {
@@ -75,7 +74,7 @@ function makeMemberEl(member) {
   } else if (presence === 'unavailable') {
     el.classList.add('idle');
   }
-  
+
   const avatarEl = makeAvatar(mxcToUrl(member.getMxcAvatarUrl()), name[0].toUpperCase(), 'member-avatar');
 
   const info = document.createElement('div');

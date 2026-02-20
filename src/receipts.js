@@ -25,6 +25,8 @@ document.querySelector('.status-row').appendChild(bar);
 }
 
 function renderReceipts(room) {
+  if (room.roomId !== state.roomId) { bar.innerHTML = ''; return; }
+  
   const timeline = room.timeline;
   if (!timeline.length) { bar.innerHTML = ''; return; }
 
@@ -125,4 +127,6 @@ function sendReceipt() {
   if (last) state.client.sendReadReceipt(last);
 }
 
-module.exports = { init, updateReceipts, sendReceipt };
+function clearReceipts() { bar.innerHTML = ''; }
+
+module.exports = { init, updateReceipts, sendReceipt, clearReceipts };
