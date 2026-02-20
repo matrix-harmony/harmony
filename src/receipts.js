@@ -67,7 +67,6 @@ if (receipts.length > 2) {
 
 function showReceiptPopup(receipts, room, anchor) {
   if (popup) { popup.remove(); popup = null; return; }
-
   popup = document.createElement('div');
   popup.className = 'receipt-popup';
 
