@@ -61,9 +61,13 @@ function renderBody(content) {
     tmp.querySelectorAll('pre code').forEach(block => {
       hljs.highlightElement(block);
     });
+    twemoji.parse(tmp, { folder: 'svg', ext: '.svg' });
     return tmp.innerHTML;
   }
-  return linkify(content.body || '');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = linkify(content.body || '');
+  twemoji.parse(tmp, { folder: 'svg', ext: '.svg' });
+  return tmp.innerHTML;
 }
 
 function getSenderName(userId) {

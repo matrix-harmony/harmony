@@ -1084,6 +1084,13 @@ body {
   margin-top: 2px;
 }
 
+.message-content img.emoji {
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: -0.2em;
+  display: inline;
+}
+
 .message::before {
   display: none;
 }
