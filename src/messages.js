@@ -1,10 +1,11 @@
 const state = require('./state');
 const { mxcToUrl, escapeHtml, linkify, makeAvatar, scrollToBottom } = require('./utils');
 const { showUserProfile } = require('./profile');
+const twemoji = require('twemoji');
 
 const container = document.getElementById('messages-container');
 
-const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'span', 'p', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'strong', 'u', 'em', 'del', 'code', 'br']);
+const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'span', 'p', 'ul', 'ol', 'li', 'h1', 'h2', 'h3']);
 
 function sanitiseHtml(html) {
   const tmp = document.createElement('div');
@@ -40,15 +41,15 @@ function sanitiseHtml(html) {
         }
       }
 
-      tmp.querySelectorAll('span[data-mx-spoiler]').forEach(el => {
-      el.classList.add('spoiler');
-    });
-
       clean(child);
     }
   }
 
   clean(tmp);
+
+  tmp.querySelectorAll('span[data-mx-spoiler]').forEach(el => {
+    el.classList.add('spoiler');
+  });
 
   return tmp.innerHTML;
 }
@@ -68,6 +69,44 @@ function renderBody(content) {
   tmp.innerHTML = linkify(content.body || '');
   twemoji.parse(tmp, { folder: 'svg', ext: '.svg' });
   return tmp.innerHTML;
+}
+
+function buildReplyQuote(content, room) {
+  const replyTo = content['m.relates_to']?.['m.in_reply_to']?.event_id;
+  if (!replyTo) return '';
+
+  const original = room?.timeline.find(e => e.getId() === replyTo);
+  if (!original) return '';
+
+  const sender = original.getSender();
+  const member = room.getMember(sender);
+  const name = (() => {
+    const raw = member?.name || sender.split(':')[0].slice(1);
+    const i = raw.indexOf('(');
+    return i > 0 ? raw.slice(0, i).trim() : raw;
+  })();
+
+  const avatarUrl = mxcToUrl(member?.getMxcAvatarUrl?.());
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" class="reply-avatar">`
+    : `<div class="reply-avatar reply-avatar-letter">${escapeHtml(name[0].toUpperCase())}</div>`;
+
+  const origContent = original.getContent();
+  let preview = '';
+  if (origContent.msgtype === 'm.image') {
+    preview = '📷 Image';
+  } else {
+    preview = escapeHtml((origContent.body || '').replace(/^>.*\n?/gm, '').trim().slice(0, 100));
+  }
+
+  return `
+    <div class="reply-quote" data-reply-to="${replyTo}">
+      <div class="reply-line"></div>
+      ${avatarHtml}
+      <span class="reply-sender">${escapeHtml(name)}</span>
+      <span class="reply-preview">${preview}</span>
+    </div>
+  `;
 }
 
 function getSenderName(userId) {
@@ -91,13 +130,14 @@ function buildMessageEl(event, prevEvent = null) {
   const timeStr = ts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
   const name = getSenderName(sender);
   const letter = name[0].toUpperCase();
+  const hasReply = !!content['m.relates_to']?.['m.in_reply_to']?.event_id;
 
   let grouped = false;
-  if (prevEvent) {
+  if (!hasReply && prevEvent) {
     grouped = prevEvent.getSender() === sender &&
       prevEvent.getType() === 'm.room.message' &&
       ts - new Date(prevEvent.getDate()) < 5 * 60 * 1000;
-  } else {
+  } else if (!hasReply) {
     const last = container.querySelector('.message:last-of-type');
     if (last) grouped = isGrouped(sender, ts.getTime(), last);
   }
@@ -121,15 +161,18 @@ function buildMessageEl(event, prevEvent = null) {
   el.dataset.senderId = sender;
   el.dataset.timestamp = ts.getTime();
 
+  const room = state.client.getRoom(state.roomId);
+  const replyQuote = buildReplyQuote(content, room);
+
   let body = '';
   if (content.msgtype === 'm.image') {
-    const url = mxcToUrl(content.url);
-    body = url
-      ? `<div class="message-image-container"><img src="${url}" alt="${escapeHtml(content.body || 'Image')}" class="message-image" loading="lazy"></div>`
-      : `<div class="message-content">[Image]</div>`;
-  } else {
-    body = `<div class="message-content">${renderBody(content)}</div>`;
-  }
+  const url = mxcToUrl(content.url);
+  body = url
+    ? `<div class="message-image-container"><img src="${url}" alt="${escapeHtml(content.body || 'Image')}" class="message-image" loading="lazy"></div>`
+    : `<div class="message-content">[Image]</div>`;
+} else {
+  body = `<div class="message-content">${renderBody(content)}</div>`;
+}
 
   if (grouped) {
     el.innerHTML = `
@@ -137,22 +180,36 @@ function buildMessageEl(event, prevEvent = null) {
         <span class="message-time-hover">${timeStr}</span>
         ${body}
       </div>`;
-  } else {
-    const room = state.client.getRoom(state.roomId);
-    const avatarUrl = mxcToUrl(room?.getMember(sender)?.getMxcAvatarUrl());
-    const avatarEl = makeAvatar(avatarUrl, letter, 'message-avatar');
-    el.appendChild(avatarEl);
-    el.innerHTML += `
-      <div class="message-header">
-        <span class="message-sender">${escapeHtml(name)}</span>
-        <span class="message-time">${timeStr}</span>
-      </div>
-      ${body}`;
-  }
+      } else {
+        const avatarUrl = mxcToUrl(room?.getMember(sender)?.getMxcAvatarUrl());
+        const avatarEl = makeAvatar(avatarUrl, letter, 'message-avatar');
+
+        if (replyQuote) {
+          const replyWrapper = document.createElement('div');
+          replyWrapper.innerHTML = replyQuote;
+          el.appendChild(replyWrapper.firstElementChild);
+        }
+
+        const row = document.createElement('div');
+        row.className = 'message-row';
+        row.appendChild(avatarEl);
+
+        const msgBody = document.createElement('div');
+        msgBody.className = 'message-body';
+        msgBody.innerHTML = `
+          <div class="message-header">
+            <span class="message-sender">${escapeHtml(name)}</span>
+            <span class="message-time">${timeStr}</span>
+          </div>
+          ${body}`;
+        row.appendChild(msgBody);
+        el.appendChild(row);
+      }
+
+  el.dataset.eventId = event.getId();
 
   return el;
 }
-
 
 function loadMessages(roomId) {
   const room = state.client.getRoom(roomId);
@@ -187,21 +244,22 @@ async function loadFullHistory(roomId) {
   if (state.client.isRoomEncrypted(roomId)) return;
   const room = state.client.getRoom(roomId);
   let loads = 0;
+  let prevScroll = 0;
 
-while (loads < 3) {
-  if (state.roomId !== roomId) return;
-  try {
-    const result = await state.client.scrollback(room, 50);
+  while (loads < 3) {
     if (state.roomId !== roomId) return;
-    if (!result || result === 0) break;
-    loads++;
-  } catch {
-    break;
+    try {
+      const result = await state.client.scrollback(room, 50);
+      if (state.roomId !== roomId) return;
+      if (!result || result === 0) break;
+      loads++;
+    } catch {
+      break;
+    }
   }
-}
 
-if (state.roomId !== roomId) return;
-const prevScroll = container.scrollHeight - container.scrollTop;
+  if (state.roomId !== roomId) return;
+  prevScroll = container.scrollHeight - container.scrollTop;
   rebuildMessages(room.timeline);
   container.scrollTop = container.scrollHeight - prevScroll;
   state.canLoadMore = loads < 10;
@@ -265,16 +323,50 @@ function handleIncoming(event, room, toStart) {
   if (toStart || room.roomId !== state.roomId) return;
   if (event.getType() !== 'm.room.message') return;
 
+  const relation = event.getContent()['m.relates_to'];
+  if (relation?.rel_type === 'm.replace') {
+    const originalId = relation.event_id;
+    const original = container.querySelector(`[data-event-id="${originalId}"]`);
+    if (original) {
+      const newContent = event.getContent()['m.new_content'] || event.getContent();
+
+      const timeline = room.timeline;
+      const origIdx = timeline.findIndex(e => e.getId() === originalId);
+      const prevEvent = origIdx > 0 ? timeline[origIdx - 1] : null;
+
+      const fakeEvent = {
+        getSender: () => event.getSender(),
+        getContent: () => ({ ...newContent }),
+        getDate: () => new Date(parseInt(original.dataset.timestamp)),
+        getType: () => 'm.room.message',
+        getId: () => originalId,
+      };
+
+      const newEl = buildMessageEl(fakeEvent, prevEvent);
+      newEl.dataset.eventId = originalId;
+      newEl.dataset.senderId = event.getSender();
+      newEl.dataset.timestamp = original.dataset.timestamp;
+
+      const editedTag = document.createElement('span');
+      editedTag.className = 'message-edited';
+      editedTag.textContent = '(edited)';
+      newEl.querySelector('.message-content')?.appendChild(editedTag);
+      original.replaceWith(newEl);
+    }
+    return;
+  }
+
   if (event.getSender() === state.client.getUserId()) {
     container.querySelectorAll('[data-temp-id]').forEach(el => el.remove());
   }
 
-  container.appendChild(buildMessageEl(event));
+  const el = buildMessageEl(event);
+  el.dataset.eventId = event.getId();
+  container.appendChild(el);
   scrollToBottom();
 }
 
 document.addEventListener('click', e => {
-
   if (e.target.closest('.message-avatar') || e.target.classList.contains('message-sender')) {
     const msg = e.target.closest('.message');
     if (!msg) return;
@@ -302,8 +394,19 @@ document.addEventListener('click', e => {
   }
 
   if (e.target.classList.contains('spoiler')) {
-  e.target.classList.toggle('revealed');
-  return;
+    e.target.classList.toggle('revealed');
+    return;
+  }
+
+  if (e.target.closest('.reply-quote')) {
+    const replyTo = e.target.closest('.reply-quote').dataset.replyTo;
+    const target = container.querySelector(`[data-event-id="${replyTo}"]`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('message-highlight');
+      setTimeout(() => target.classList.remove('message-highlight'), 2000);
+    }
+    return;
   }
 
   if (e.target.closest('a[data-mention]')) {
@@ -314,6 +417,5 @@ document.addEventListener('click', e => {
     if (member) showUserProfile(member, e.target);
   }
 });
-
 
 module.exports = { loadMessages, loadFullHistory, handleIncoming, buildMessageEl };
