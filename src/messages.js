@@ -131,6 +131,8 @@ function buildMessageEl(event, prevEvent = null) {
   const name = getSenderName(sender);
   const letter = name[0].toUpperCase();
   const hasReply = !!content['m.relates_to']?.['m.in_reply_to']?.event_id;
+  const myId = state.client.getUserId();
+  const isOwn = sender === myId;
 
   let grouped = false;
   if (!hasReply && prevEvent) {
@@ -142,7 +144,6 @@ function buildMessageEl(event, prevEvent = null) {
     if (last) grouped = isGrouped(sender, ts.getTime(), last);
   }
 
-  const myId = state.client.getUserId();
   const bodyText = content.body || '';
   const myName = (() => {
     const member = state.client.getRoom(state.roomId)?.getMember(myId);
@@ -166,13 +167,38 @@ function buildMessageEl(event, prevEvent = null) {
 
   let body = '';
   if (content.msgtype === 'm.image') {
-  const url = mxcToUrl(content.url);
-  body = url
-    ? `<div class="message-image-container"><img src="${url}" alt="${escapeHtml(content.body || 'Image')}" class="message-image" loading="lazy"></div>`
-    : `<div class="message-content">[Image]</div>`;
-} else {
-  body = `<div class="message-content">${renderBody(content)}</div>`;
-}
+    const url = mxcToUrl(content.url);
+    body = url
+      ? `<div class="message-image-container"><img src="${url}" alt="${escapeHtml(content.body || 'Image')}" class="message-image" loading="lazy"></div>`
+      : `<div class="message-content">[Image]</div>`;
+  } else {
+    body = `<div class="message-content">${renderBody(content)}</div>`;
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+  actions.innerHTML = `
+    <button class="message-action-btn" data-action="reply" title="Reply">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+      </svg>
+    </button>
+    <button class="message-action-btn" data-action="edit" title="Edit" style="display:${isOwn ? 'flex' : 'none'}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+      </svg>
+    </button>
+    <button class="message-action-btn" data-action="pin" title="Pin Message">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+      </svg>
+    </button>
+    <button class="message-action-btn action-danger" data-action="delete" title="Delete Message" style="display:${isOwn ? 'flex' : 'none'}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+      </svg>
+    </button>
+  `;
 
   if (grouped) {
     el.innerHTML = `
@@ -180,35 +206,168 @@ function buildMessageEl(event, prevEvent = null) {
         <span class="message-time-hover">${timeStr}</span>
         ${body}
       </div>`;
-      } else {
-        const avatarUrl = mxcToUrl(room?.getMember(sender)?.getMxcAvatarUrl());
-        const avatarEl = makeAvatar(avatarUrl, letter, 'message-avatar');
+  } else {
+    const avatarUrl = mxcToUrl(room?.getMember(sender)?.getMxcAvatarUrl());
+    const avatarEl = makeAvatar(avatarUrl, letter, 'message-avatar');
 
-        if (replyQuote) {
-          const replyWrapper = document.createElement('div');
-          replyWrapper.innerHTML = replyQuote;
-          el.appendChild(replyWrapper.firstElementChild);
-        }
+    if (replyQuote) {
+      const replyWrapper = document.createElement('div');
+      replyWrapper.innerHTML = replyQuote;
+      el.appendChild(replyWrapper.firstElementChild);
+    }
 
-        const row = document.createElement('div');
-        row.className = 'message-row';
-        row.appendChild(avatarEl);
+    const row = document.createElement('div');
+    row.className = 'message-row';
+    row.appendChild(avatarEl);
 
-        const msgBody = document.createElement('div');
-        msgBody.className = 'message-body';
-        msgBody.innerHTML = `
-          <div class="message-header">
-            <span class="message-sender">${escapeHtml(name)}</span>
-            <span class="message-time">${timeStr}</span>
-          </div>
-          ${body}`;
-        row.appendChild(msgBody);
-        el.appendChild(row);
-      }
+    const msgBody = document.createElement('div');
+    msgBody.className = 'message-body';
+    msgBody.innerHTML = `
+      <div class="message-header">
+        <span class="message-sender">${escapeHtml(name)}</span>
+        <span class="message-time">${timeStr}</span>
+      </div>
+      ${body}`;
+    row.appendChild(msgBody);
+    el.appendChild(row);
+  }
 
+  el.appendChild(actions);
   el.dataset.eventId = event.getId();
+  el.dataset.body = (content.body || '').replace(/^>.*$/gm, '').replace(/^\s+/, '').trim();
 
   return el;
+}
+
+function applyEditsToTimeline(timeline) {
+  const edits = new Map();
+  timeline.forEach(ev => {
+    if (ev.getType() !== 'm.room.message') return;
+    const rel = ev.getContent()['m.relates_to'];
+    if (rel?.rel_type === 'm.replace') {
+      edits.set(rel.event_id, ev);
+    }
+  });
+  return edits;
+}
+
+function makeEditedEvent(ev, editEv) {
+  const newContent = { ...(editEv.getContent()['m.new_content'] || editEv.getContent()) };
+  if (newContent.body?.startsWith('* ')) newContent.body = newContent.body.slice(2);
+  return {
+    getSender: () => ev.getSender(),
+    getContent: () => newContent,
+    getDate: () => ev.getDate(),
+    getType: () => 'm.room.message',
+    getId: () => ev.getId(),
+  };
+}
+
+function startReply(event, room) {
+  const sender = event.getSender();
+  const member = room.getMember(sender);
+  const name = (() => {
+    const raw = member?.name || sender.split(':')[0].slice(1);
+    const i = raw.indexOf('(');
+    return i > 0 ? raw.slice(0, i).trim() : raw;
+  })();
+  const content = event.getContent();
+  const preview = content.msgtype === 'm.image' ? '📷 Image' : (content.body || '').slice(0, 80);
+
+  state.replyTo = event;
+  cancelEdit();
+
+  let bar = document.getElementById('reply-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'reply-bar';
+    bar.className = 'reply-bar';
+    document.querySelector('.message-input-container').prepend(bar);
+  }
+  bar.innerHTML = `
+    <div class="reply-bar-inner">
+      <div class="reply-bar-left">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" class="reply-bar-icon">
+          <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
+        </svg>
+        <span class="reply-bar-text">Replying to <strong>${escapeHtml(name)}</strong></span>
+        <span class="reply-bar-preview">${escapeHtml(preview)}</span>
+      </div>
+      <button class="reply-bar-close">✕</button>
+    </div>
+  `;
+  bar.querySelector('.reply-bar-close').addEventListener('click', cancelReply);
+  document.getElementById('message-input').focus();
+}
+
+function cancelReply() {
+  state.replyTo = null;
+  document.getElementById('reply-bar')?.remove();
+}
+
+function startEdit(event, msgEl) {
+  cancelEdit();
+  cancelReply();
+  state.editingEvent = event;
+
+  if (!msgEl) msgEl = container.querySelector(`[data-event-id="${event.getId()}"]`);
+  if (!msgEl) return;
+
+  const contentEl = msgEl.querySelector('.message-content');
+  if (!contentEl) return;
+
+  const original = msgEl.dataset.body || event.getContent().body || '';
+  contentEl.style.display = 'none';
+
+  const editBox = document.createElement('div');
+  editBox.className = 'edit-box';
+  editBox.id = 'edit-box';
+  editBox.innerHTML = `
+    <textarea class="edit-input">${escapeHtml(original)}</textarea>
+    <div class="edit-hint">escape to <span class="edit-cancel-link">cancel</span> • enter to <span class="edit-save-link">save</span></div>
+  `;
+  contentEl.insertAdjacentElement('afterend', editBox);
+
+  const textarea = editBox.querySelector('.edit-input');
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  editBox.querySelector('.edit-cancel-link').addEventListener('click', cancelEdit);
+  editBox.querySelector('.edit-save-link').addEventListener('click', () => saveEdit(textarea.value, event));
+
+  textarea.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(textarea.value, event); }
+  });
+}
+
+function cancelEdit() {
+  const editBox = document.getElementById('edit-box');
+  if (editBox) {
+    const contentEl = editBox.previousElementSibling;
+    if (contentEl?.classList.contains('message-content')) {
+      contentEl.style.removeProperty('display');
+    }
+    editBox.remove();
+  }
+  state.editingEvent = null;
+}
+
+async function saveEdit(newText, event) {
+  const original = event.getContent().body || '';
+  if (!newText.trim() || newText.trim() === original.trim()) {
+    cancelEdit();
+    return;
+  }
+  const { applyMarkdown } = require('./mentions');
+  const formatted = applyMarkdown(newText);
+  await state.client.sendMessage(state.roomId, {
+    'm.new_content': { msgtype: 'm.text', body: newText, format: 'org.matrix.custom.html', formatted_body: formatted },
+    'm.relates_to': { rel_type: 'm.replace', event_id: event.getId() },
+    msgtype: 'm.text',
+    body: newText,
+  });
+  cancelEdit();
 }
 
 function loadMessages(roomId) {
@@ -219,7 +378,7 @@ function loadMessages(roomId) {
   if (state.client.isRoomEncrypted(roomId)) {
     const notice = document.createElement('div');
     notice.className = 'encryption-notice';
-    notice.innerHTML = 'Encryption currently not supported. Coming Soon.';
+    notice.innerHTML = '🔒 Encryption currently not supported. Coming Soon.';
     container.appendChild(notice);
     return;
   }
@@ -230,9 +389,27 @@ function loadMessages(roomId) {
     return;
   }
 
-  timeline.slice(-100).forEach((ev, i, arr) => {
-    if (ev.getType() === 'm.room.message')
-      container.appendChild(buildMessageEl(ev, i > 0 ? arr[i - 1] : null));
+  const edits = applyEditsToTimeline(timeline);
+  const slice = timeline.slice(-100);
+
+  slice.forEach((ev, i, arr) => {
+    if (ev.getType() !== 'm.room.message') return;
+    const rel = ev.getContent()['m.relates_to'];
+    if (rel?.rel_type === 'm.replace') return;
+
+    const editEv = edits.get(ev.getId());
+    const renderEvent = editEv ? makeEditedEvent(ev, editEv) : ev;
+    const el = buildMessageEl(renderEvent, i > 0 ? arr[i - 1] : null);
+    el.dataset.eventId = ev.getId();
+
+    if (editEv) {
+      const tag = document.createElement('span');
+      tag.className = 'message-edited';
+      tag.textContent = '(edited)';
+      el.querySelector('.message-content')?.appendChild(tag);
+    }
+
+    container.appendChild(el);
   });
 
   state.canLoadMore = true;
@@ -268,10 +445,25 @@ async function loadFullHistory(roomId) {
 
 function rebuildMessages(timeline) {
   container.innerHTML = '';
+  const edits = applyEditsToTimeline(timeline);
+
   timeline.forEach((ev, i, arr) => {
     if (ev.getType() !== 'm.room.message') return;
-    const el = buildMessageEl(ev, i > 0 ? arr[i - 1] : null);
+    const rel = ev.getContent()['m.relates_to'];
+    if (rel?.rel_type === 'm.replace') return;
+
+    const editEv = edits.get(ev.getId());
+    const renderEvent = editEv ? makeEditedEvent(ev, editEv) : ev;
+    const el = buildMessageEl(renderEvent, i > 0 ? arr[i - 1] : null);
     el.dataset.eventId = ev.getId();
+
+    if (editEv) {
+      const tag = document.createElement('span');
+      tag.className = 'message-edited';
+      tag.textContent = '(edited)';
+      el.querySelector('.message-content')?.appendChild(tag);
+    }
+
     container.appendChild(el);
   });
 }
@@ -296,6 +488,7 @@ async function loadOlderMessages(roomId) {
   try {
     const result = await state.client.scrollback(room, 50);
     const timeline = room.timeline;
+    const edits = applyEditsToTimeline(timeline);
 
     const oldestId = container.querySelector('.message')?.dataset?.eventId;
     let startIdx = oldestId ? timeline.findIndex(e => e.getId() === oldestId) : 0;
@@ -304,9 +497,22 @@ async function loadOlderMessages(roomId) {
     const older = timeline.slice(Math.max(0, startIdx - 50), startIdx);
     [...older].reverse().forEach((ev, i, arr) => {
       if (ev.getType() !== 'm.room.message') return;
+      const rel = ev.getContent()['m.relates_to'];
+      if (rel?.rel_type === 'm.replace') return;
+
       const prevEv = i < arr.length - 1 ? arr[i + 1] : null;
-      const el = buildMessageEl(ev, prevEv);
+      const editEv = edits.get(ev.getId());
+      const renderEvent = editEv ? makeEditedEvent(ev, editEv) : ev;
+      const el = buildMessageEl(renderEvent, prevEv);
       el.dataset.eventId = ev.getId();
+
+      if (editEv) {
+        const tag = document.createElement('span');
+        tag.className = 'message-edited';
+        tag.textContent = '(edited)';
+        el.querySelector('.message-content')?.appendChild(tag);
+      }
+
       container.prepend(el);
     });
 
@@ -321,6 +527,16 @@ async function loadOlderMessages(roomId) {
 
 function handleIncoming(event, room, toStart) {
   if (toStart || room.roomId !== state.roomId) return;
+
+  if (event.getType() === 'm.room.redaction') {
+    const redactedId = event.getAssociatedId?.() || event.event?.redacts;
+    if (redactedId) {
+      const el = container.querySelector(`[data-event-id="${redactedId}"]`);
+      if (el) el.remove();
+    }
+    return;
+  }
+
   if (event.getType() !== 'm.room.message') return;
 
   const relation = event.getContent()['m.relates_to'];
@@ -328,30 +544,24 @@ function handleIncoming(event, room, toStart) {
     const originalId = relation.event_id;
     const original = container.querySelector(`[data-event-id="${originalId}"]`);
     if (original) {
-      const newContent = event.getContent()['m.new_content'] || event.getContent();
-
       const timeline = room.timeline;
       const origIdx = timeline.findIndex(e => e.getId() === originalId);
+      const origEv = timeline[origIdx];
       const prevEvent = origIdx > 0 ? timeline[origIdx - 1] : null;
 
-      const fakeEvent = {
-        getSender: () => event.getSender(),
-        getContent: () => ({ ...newContent }),
-        getDate: () => new Date(parseInt(original.dataset.timestamp)),
-        getType: () => 'm.room.message',
-        getId: () => originalId,
-      };
+      if (origEv) {
+        const renderEvent = makeEditedEvent(origEv, event);
+        const newEl = buildMessageEl(renderEvent, prevEvent);
+        newEl.dataset.eventId = originalId;
+        newEl.dataset.senderId = origEv.getSender();
+        newEl.dataset.timestamp = original.dataset.timestamp;
 
-      const newEl = buildMessageEl(fakeEvent, prevEvent);
-      newEl.dataset.eventId = originalId;
-      newEl.dataset.senderId = event.getSender();
-      newEl.dataset.timestamp = original.dataset.timestamp;
-
-      const editedTag = document.createElement('span');
-      editedTag.className = 'message-edited';
-      editedTag.textContent = '(edited)';
-      newEl.querySelector('.message-content')?.appendChild(editedTag);
-      original.replaceWith(newEl);
+        const editedTag = document.createElement('span');
+        editedTag.className = 'message-edited';
+        editedTag.textContent = '(edited)';
+        newEl.querySelector('.message-content')?.appendChild(editedTag);
+        original.replaceWith(newEl);
+      }
     }
     return;
   }
@@ -367,6 +577,42 @@ function handleIncoming(event, room, toStart) {
 }
 
 document.addEventListener('click', e => {
+  if (e.target.closest('.message-action-btn')) {
+    const btn = e.target.closest('.message-action-btn');
+    const action = btn.dataset.action;
+    const msg = btn.closest('.message');
+    const eventId = msg?.dataset.eventId;
+    const room = state.client.getRoom(state.roomId);
+    const event = room?.timeline.find(ev => ev.getId() === eventId) ||
+                  room?.timeline.find(ev => {
+                    const rel = ev.getContent()['m.relates_to'];
+                    return rel?.rel_type === 'm.replace' && rel.event_id === eventId;
+                  });
+    if (!event && action !== 'delete') return;
+
+    if (action === 'reply') {
+      const fakeEvent = {
+        getSender: () => msg.dataset.senderId,
+        getContent: () => ({ msgtype: 'm.text', body: msg.dataset.body || '' }),
+        getDate: () => new Date(parseInt(msg.dataset.timestamp)),
+        getType: () => 'm.room.message',
+        getId: () => eventId,
+      };
+      startReply(fakeEvent, room);
+    } else if (action === 'edit') {
+      const baseEvent = room?.timeline.find(ev => ev.getId() === eventId);
+      if (baseEvent) startEdit(baseEvent, msg);
+    } else if (action === 'pin') {
+      const pinned = room.currentState.getStateEvents('m.room.pinned_events', '')?.getContent()?.pinned || [];
+      if (!pinned.includes(eventId)) {
+        state.client.sendStateEvent(state.roomId, 'm.room.pinned_events', { pinned: [...pinned, eventId] }, '');
+      }
+    } else if (action === 'delete') {
+      state.client.redactEvent(state.roomId, eventId);
+    }
+    return;
+  }
+
   if (e.target.closest('.message-avatar') || e.target.classList.contains('message-sender')) {
     const msg = e.target.closest('.message');
     if (!msg) return;
@@ -418,4 +664,4 @@ document.addEventListener('click', e => {
   }
 });
 
-module.exports = { loadMessages, loadFullHistory, handleIncoming, buildMessageEl };
+module.exports = { loadMessages, loadFullHistory, handleIncoming, buildMessageEl, cancelReply, cancelEdit };

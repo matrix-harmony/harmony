@@ -180,9 +180,11 @@ function getMembersSorted() {
 }
 
 function buildBody(text) {
+  const { cancelReply } = require('./messages');
+
   const offsets = [...resolvedMentions.keys()].sort((a, b) => a - b);
   let formatted = applyMarkdown(text);
-  
+
   for (const offset of offsets) {
     const { member } = resolvedMentions.get(offset);
     const tag = escapeHtml(`@${member.name}`);
@@ -194,17 +196,28 @@ function buildBody(text) {
 
   resolvedMentions.clear();
 
-  console.log('formatted:', formatted);
-
-  return {
+  const content = {
     msgtype: 'm.text',
     body: text,
     format: 'org.matrix.custom.html',
     formatted_body: formatted,
   };
+
+  if (state.replyTo) {
+    content['m.relates_to'] = { 'm.in_reply_to': { event_id: state.replyTo.getId() } };
+    cancelReply();
+  }
+
+  return content;
 }
 
 function applyMarkdown(text) {
+  const spoilers = [];
+  text = text.replace(/\|\|(.+?)\|\|/g, (_, content) => {
+    spoilers.push(content);
+    return `SPOILER${spoilers.length - 1}END`;
+  });
+
   const blocks = [];
   let s = escapeHtml(text);
 
@@ -230,6 +243,10 @@ function applyMarkdown(text) {
 
   blocks.forEach((block, i) => {
     s = s.replace(`CODEBLOCK${i}END`, block);
+  });
+
+  spoilers.forEach((content, i) => {
+    s = s.replace(`SPOILER${i}END`, `<span data-mx-spoiler>${escapeHtml(content)}</span>`);
   });
 
   return s;
