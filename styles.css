@@ -971,6 +971,7 @@ body {
 .message-grouped {
   padding: 0px 16px 0px 16px;
   margin-top: 0px;
+  position: relative;
 }
 
 .message-grouped-content {

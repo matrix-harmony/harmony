@@ -97,7 +97,7 @@ function buildReplyQuote(content, room) {
   const origContent = original.getContent();
   let preview = '';
   if (origContent.msgtype === 'm.image') {
-    preview = '📷 Image';
+    preview = 'Click to view media';
   } else {
     preview = escapeHtml((origContent.body || '').replace(/^>.*\n?/gm, '').trim().slice(0, 100));
   }
@@ -386,7 +386,7 @@ function loadMessages(roomId) {
   if (state.client.isRoomEncrypted(roomId)) {
     const notice = document.createElement('div');
     notice.className = 'encryption-notice';
-    notice.innerHTML = '🔒 Encryption currently not supported. Coming Soon.';
+    notice.innerHTML = 'Encryption currently not supported. Coming Soon.';
     container.appendChild(notice);
     return;
   }
