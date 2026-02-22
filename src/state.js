@@ -1,4 +1,3 @@
-// shared mutable state — import this everywhere instead of using globals
 const state = {
   client: null,
   roomId: null,

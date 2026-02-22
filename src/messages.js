@@ -2,8 +2,11 @@ const state = require('./state');
 const { mxcToUrl, escapeHtml, linkify, makeAvatar, scrollToBottom } = require('./utils');
 const { showUserProfile } = require('./profile');
 const twemoji = require('twemoji');
+const path = require('path');
 
 const container = document.getElementById('messages-container');
+
+const TWEMOJI_OPTS = {};
 
 const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'span', 'p', 'ul', 'ol', 'li', 'h1', 'h2', 'h3']);
 
@@ -62,12 +65,12 @@ function renderBody(content) {
     tmp.querySelectorAll('pre code').forEach(block => {
       hljs.highlightElement(block);
     });
-    twemoji.parse(tmp, { folder: 'svg', ext: '.svg' });
+    twemoji.parse(tmp, TWEMOJI_OPTS);
     return tmp.innerHTML;
   }
   const tmp = document.createElement('div');
   tmp.innerHTML = linkify(content.body || '');
-  twemoji.parse(tmp, { folder: 'svg', ext: '.svg' });
+  twemoji.parse(tmp, TWEMOJI_OPTS);
   return tmp.innerHTML;
 }
 
@@ -178,6 +181,11 @@ function buildMessageEl(event, prevEvent = null) {
   const actions = document.createElement('div');
   actions.className = 'message-actions';
   actions.innerHTML = `
+    <button class="message-action-btn" data-action="react" title="Add Reaction">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+      </svg>
+    </button>
     <button class="message-action-btn" data-action="reply" title="Reply">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
         <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/>
@@ -415,6 +423,7 @@ function loadMessages(roomId) {
   state.canLoadMore = true;
   scrollToBottom();
   setupInfiniteScroll(roomId);
+  buildReactionsFromTimeline(timeline);
 }
 
 async function loadFullHistory(roomId) {
@@ -466,6 +475,8 @@ function rebuildMessages(timeline) {
 
     container.appendChild(el);
   });
+
+  buildReactionsFromTimeline(timeline);
 }
 
 function setupInfiniteScroll(roomId) {
@@ -537,6 +548,20 @@ function handleIncoming(event, room, toStart) {
     return;
   }
 
+  if (event.getType() === 'm.reaction') {
+    const rel = event.getContent()['m.relates_to'];
+    if (rel?.rel_type === 'm.annotation') {
+      setTimeout(() => {
+        const msgEl = container.querySelector(`[data-event-id="${rel.event_id}"]`);
+        if (msgEl) {
+          const reactions = getReactionsForEvent(room.timeline, rel.event_id);
+          renderReactions(msgEl, reactions);
+        }
+      }, 100);
+    }
+    return;
+  }
+
   if (event.getType() !== 'm.room.message') return;
 
   const relation = event.getContent()['m.relates_to'];
@@ -576,7 +601,7 @@ function handleIncoming(event, room, toStart) {
   scrollToBottom();
 }
 
-document.addEventListener('click', e => {
+document.addEventListener('click', async e => {
   if (e.target.closest('.message-action-btn')) {
     const btn = e.target.closest('.message-action-btn');
     const action = btn.dataset.action;
@@ -589,6 +614,11 @@ document.addEventListener('click', e => {
                     return rel?.rel_type === 'm.replace' && rel.event_id === eventId;
                   });
     if (!event && action !== 'delete') return;
+
+    if (action === 'react') {
+  const { showReactionPicker } = require('./picker');
+  showReactionPicker(btn, eventId);
+} else if (action === 'reply')
 
     if (action === 'reply') {
       const fakeEvent = {
@@ -608,7 +638,9 @@ document.addEventListener('click', e => {
         state.client.sendStateEvent(state.roomId, 'm.room.pinned_events', { pinned: [...pinned, eventId] }, '');
       }
     } else if (action === 'delete') {
-      state.client.redactEvent(state.roomId, eventId);
+      await state.client.sendEvent(state.roomId, 'm.room.redaction', {
+        redacts: eventId,
+      }, eventId);
     }
     return;
   }
@@ -663,5 +695,127 @@ document.addEventListener('click', e => {
     if (member) showUserProfile(member, e.target);
   }
 });
+
+function getReactionsForEvent(timeline, eventId) {
+  const reactions = new Map();
+  const myId = state.client.getUserId();
+  timeline.forEach(ev => {
+    if (ev.getType() !== 'm.reaction') return;
+    const rel = ev.getContent()['m.relates_to'];
+    if (rel?.rel_type !== 'm.annotation' || rel.event_id !== eventId) return;
+    const key = rel.key;
+    if (!reactions.has(key)) reactions.set(key, { count: 0, senders: [], myReactionId: null });
+    const r = reactions.get(key);
+    r.count++;
+    r.senders.push(ev.getSender());
+    if (ev.getSender() === myId) r.myReactionId = ev.getId();
+  });
+  return reactions;
+}
+
+const pendingRedactions = new Set();
+const pendingReactions = new Set();
+
+function renderReactions(el, reactions) {
+  let bar = el.querySelector('.reactions-bar');
+  if (reactions.size === 0) { bar?.remove(); return; }
+
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'reactions-bar';
+    const row = el.querySelector('.message-row') || el.querySelector('.message-grouped-content');
+    row ? row.insertAdjacentElement('afterend', bar) : el.appendChild(bar);
+  }
+
+  bar.innerHTML = '';
+  const myId = state.client.getUserId();
+
+  reactions.forEach(({ count, senders, myReactionId }, emoji) => {
+    const pill = document.createElement('button');
+    pill.className = 'reaction-pill' + (myReactionId ? ' reaction-mine' : '');
+    pill.title = senders.map(s => getSenderName(s)).join(', ');
+    pill.innerHTML = `<span class="reaction-emoji">${emoji}</span><span class="reaction-count">${count}</span>`;
+    pill.dataset.emoji = emoji;
+    pill.dataset.myReactionId = myReactionId || '';
+
+    pill.dataset.eventId = el.dataset.eventId;
+    pill.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const currentMyReactionId = pill.dataset.myReactionId;
+      const key = emoji;
+      const targetEventId = pill.dataset.eventId;
+      const reactionKey = `${targetEventId}:${key}`;
+
+      if (pendingReactions.has(reactionKey)) return;
+      pendingReactions.add(reactionKey);
+
+      if (currentMyReactionId) {
+        if (pendingRedactions.has(currentMyReactionId)) { pendingReactions.delete(reactionKey); return; }
+        pendingRedactions.add(currentMyReactionId);
+        pill.dataset.myReactionId = '';
+        pill.classList.remove('reaction-mine');
+        const countEl = pill.querySelector('.reaction-count');
+        const newCount = parseInt(countEl.textContent) - 1;
+        if (newCount <= 0) {
+          pill.remove();
+        } else {
+          countEl.textContent = newCount;
+        }
+        try {
+          await state.client.sendEvent(state.roomId, 'm.room.redaction', { redacts: currentMyReactionId }, currentMyReactionId);
+        } catch (err) {
+          console.error('Unreact error:', err);
+        } finally {
+          pendingRedactions.delete(currentMyReactionId);
+          pendingReactions.delete(reactionKey);
+        }
+      } else {
+        const room = state.client.getRoom(state.roomId);
+        const alreadyReacted = room?.timeline.some(ev => {
+          if (ev.getType() !== 'm.reaction') return false;
+          const rel = ev.getContent()['m.relates_to'];
+          return rel?.rel_type === 'm.annotation' &&
+            rel.event_id === targetEventId &&
+            rel.key === key &&
+            ev.getSender() === state.client.getUserId();
+        });
+
+        if (alreadyReacted) {
+          pendingReactions.delete(reactionKey);
+          return;
+        }
+
+        try {
+          await state.client.sendEvent(state.roomId, 'm.reaction', {
+            'm.relates_to': {
+              rel_type: 'm.annotation',
+              event_id: targetEventId,
+              key: key,
+            }
+          });
+        } catch (err) {
+          console.error('Reaction error:', err);
+          pendingReactions.delete(reactionKey);
+        }
+      }
+    });
+
+    bar.appendChild(pill);
+    twemoji.parse(pill.querySelector('.reaction-emoji'), TWEMOJI_OPTS);
+  });
+}
+
+function applyReactionsToMessage(timeline, el) {
+  const eventId = el.dataset.eventId;
+  if (!eventId) return;
+  const reactions = getReactionsForEvent(timeline, eventId);
+  renderReactions(el, reactions);
+}
+
+function buildReactionsFromTimeline(timeline) {
+  container.querySelectorAll('.message[data-event-id]').forEach(el => {
+    applyReactionsToMessage(timeline, el);
+  });
+}
 
 module.exports = { loadMessages, loadFullHistory, handleIncoming, buildMessageEl, cancelReply, cancelEdit };

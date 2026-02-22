@@ -8,8 +8,6 @@ const { showPinnedMessages, closePinned } = require('./pinned');
 
 const roomsList = document.getElementById('rooms-list');
 
-// ---- nav buttons ----
-
 function showHomeNav(visible) {
   document.getElementById('home-nav')?.classList.toggle('visible', visible);
   const membersBtn = document.getElementById('members-btn');
@@ -67,8 +65,6 @@ document.getElementById('home-server')?.addEventListener('click', () => {
   }
 });
 
-// ---- home view ----
-
 function loadHomeView() {
   if (!state.client) return;
 
@@ -111,8 +107,6 @@ function loadHomeView() {
     }
   }
 }
-
-// ---- spaces ----
 
 function loadSpaces() {
   const spacesList = document.getElementById('spaces-list');
@@ -239,8 +233,6 @@ function renderSubSpaceCategory(sub) {
     .forEach(r => roomsEl.appendChild(makeRoomEl(r)));
 }
 
-// ---- room element ----
-
 function makeRoomEl(room, isDm = false) {
   const el = document.createElement('div');
   el.className = 'room-item';
@@ -271,8 +263,6 @@ function makeCategoryHeader(text) {
   el.textContent = text;
   return el;
 }
-
-// ---- open a room ----
 
 function openRoom(roomId) {
   clearTyping();

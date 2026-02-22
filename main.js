@@ -12,7 +12,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      enableRemoteModule: true
+      enableRemoteModule: true,
+      webSecurity: false,
     },
     title: 'Harmony',
     resizable: true,
@@ -21,7 +22,9 @@ function createWindow() {
 
   
   mainWindow.loadFile('index.html');
-
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+  callback(true);
+});
   mainWindow.webContents.openDevTools();
   
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -41,6 +44,8 @@ function createWindow() {
   });
 }
 app.whenReady().then(createWindow);
+app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch('allow-insecure-localhost', 'true');
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

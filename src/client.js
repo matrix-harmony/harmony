@@ -4,9 +4,10 @@ const { mxcToUrl } = require('./utils');
 const { logout } = require('./auth');
 const { loadHomeView, loadSpaces, showHomeNav, handleNewRoom } = require('./rooms');
 const { handleIncoming } = require('./messages');
-const { init: initReceipts } = require('./receipts');
+const { initPickers } = require('./picker');
 
 function buildClient(credentials) {
+
   return sdk.createClient({
     baseUrl: credentials.baseUrl || credentials.homeserver,
     accessToken: credentials.accessToken || credentials.token,
@@ -28,8 +29,7 @@ async function startClient(credentials) {
 
   state.client.once('sync', async syncState => {
     if (syncState !== 'PREPARED') return;
-    require('./typing').init();
-    initReceipts();
+
     const ownUser = state.client.getUser(userId);
     if (ownUser?.avatarUrl) {
       const url = mxcToUrl(ownUser.avatarUrl);
@@ -43,6 +43,7 @@ async function startClient(credentials) {
     loadSpaces();
     showHomeNav(true);
     loadHomeView();
+    initPickers();
 
     document.getElementById('messages-container').innerHTML =
       '<div class="empty-state"><p>Select a room to start messaging</p></div>';
@@ -56,8 +57,9 @@ async function startClient(credentials) {
     if (confirm('Log out?')) logout();
   });
 
-state.client.on('Room.timeline', handleIncoming);
+  state.client.on('Room.timeline', handleIncoming);
   state.client.on('Room', handleNewRoom);
+  
   await state.client.startClient({ 
     initialSyncLimit: 100,
     lazyLoadMembers: true,
