@@ -1,0 +1,82 @@
+/* ============================================================
+   VERTEX MATRIX - DEFAULT DARK THEME
+   Swap this file to change the entire color scheme.
+   ============================================================ */
+
+:root {
+  /* === BACKGROUNDS === */
+  --bg-primary:       #36393f;   /* main chat area */
+  --bg-secondary:     #2f3136;   /* sidebar, panels */
+  --bg-tertiary:      #202225;   /* servers bar, inputs */
+  --bg-quaternary:    #292b2f;   /* user info bar */
+  --bg-input:         #40444b;   /* message input box */
+  --bg-hover:         rgba(79, 84, 92, 0.32);
+  --bg-active:        rgba(79, 84, 92, 0.60);
+  --bg-message-hover: rgba(4, 4, 5, 0.07);
+  --bg-code:          #2b2d31;
+
+  /* === ACCENTS === */
+  --accent:           #5865f2;   /* primary brand color */
+  --accent-hover:     #4752c4;
+  --accent-muted:     rgba(88, 101, 242, 0.15);
+  --accent-muted2:    rgba(88, 101, 242, 0.20);
+  --accent-muted3:    rgba(88, 101, 242, 0.25);
+
+  /* === TEXT === */
+  --text-primary:     #dcddde;
+  --text-bright:      #ffffff;
+  --text-muted:       #b9bbbe;
+  --text-faint:       #72767d;
+  --text-sidebar:     #96989d;
+
+  /* === BORDERS === */
+  --border-primary:   #1e1f22;
+  --border-secondary: #272727;
+  --border-tertiary:  #2f2f2f;
+
+  /* === STATUS === */
+  --status-online:    #3ba55d;
+  --status-idle:      #faa81a;
+  --status-offline:   #72767d;
+
+  /* === SEMANTIC === */
+  --danger:           #ed4245;
+  --danger-hover:     #c03537;
+  --danger-muted:     rgba(237, 66, 69, 0.10);
+  --link:             #00a8fc;
+  --warning:          #faa81a;
+  --warning-muted:    rgba(250, 168, 26, 0.08);
+  --warning-border:   rgba(250, 168, 26, 0.20);
+
+  /* === MENTIONS === */
+  --mention-bg:       rgba(250, 168, 26, 0.05);
+  --mention-bg-hover: rgba(250, 168, 26, 0.08);
+  --mention-border:   #faa81a;
+  --mention-tag-bg:   rgba(88, 101, 242, 0.20);
+  --mention-tag-text: #c9cdfb;
+  --mention-tag-gold-bg:   rgba(250, 168, 26, 0.25);
+  --mention-tag-gold-text: #fde68a;
+
+  /* === REACTIONS === */
+  --reaction-bg:         rgba(79, 84, 92, 0.30);
+  --reaction-border:     rgba(79, 84, 92, 0.50);
+  --reaction-bg-hover:   rgba(79, 84, 92, 0.60);
+  --reaction-mine-bg:    rgba(88, 101, 242, 0.15);
+  --reaction-mine-text:  #c9cdfb;
+
+  /* === PROFILE === */
+  --profile-bg:       #18191c;
+  --profile-info-bg:  #232428;
+
+  /* === SHADOWS === */
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.40);
+  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.50);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.60);
+  --shadow-xl:   0 0 8px rgba(0, 0, 0, 0.80);
+
+  /* === SCROLLBAR === */
+  --scrollbar-track: #36393f;
+  --scrollbar-thumb: #202225;
+  --scrollbar-thumb-hover: #1a1c1f;
+  --scrollbar-border: #36393f;
+}
