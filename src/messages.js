@@ -45,6 +45,40 @@ async function matrixReact(roomId, eventId, emoji) {
   return await res.json();
 }
 
+function formatTimestamp(date) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today - 86400000);
+  const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (msgDay.getTime() === today.getTime()) return timeStr;
+  if (msgDay.getTime() === yesterday.getTime()) return `Yesterday at ${timeStr}`;
+  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: 'numeric' }) + ` at ${timeStr}`;
+}
+
+function formatDateDivider(date) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today - 86400000);
+  const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  if (msgDay.getTime() === today.getTime()) return 'Today';
+  if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
+  return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth() === b.getMonth() &&
+         a.getDate() === b.getDate();
+}
+
+function createDateDivider(date) {
+  const el = document.createElement('div');
+  el.className = 'date-divider';
+  el.dataset.date = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  el.innerHTML = `<span class="date-divider-text">${formatDateDivider(date)}</span>`;
+  return el;
+}
 
 const TWEMOJI_OPTS = {};
 
@@ -171,6 +205,7 @@ function buildMessageEl(event, prevEvent = null) {
   const content = event.getContent();
   const ts = new Date(event.getDate());
   const timeStr = ts.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+  const fullTimeStr = formatTimestamp(ts);
   const name = getSenderName(sender);
   const letter = name[0].toUpperCase();
   const hasReply = !!content['m.relates_to']?.['m.in_reply_to']?.event_id;
@@ -251,7 +286,7 @@ function buildMessageEl(event, prevEvent = null) {
   if (grouped) {
     el.innerHTML = `
       <div class="message-grouped-content">
-        <span class="message-time-hover">${timeStr}</span>
+        <span class="message-time-hover" title="${fullTimeStr}">${timeStr}</span>
         ${body}
       </div>`;
   } else {
@@ -273,7 +308,7 @@ function buildMessageEl(event, prevEvent = null) {
     msgBody.innerHTML = `
       <div class="message-header">
         <span class="message-sender">${escapeHtml(name)}</span>
-        <span class="message-time">${timeStr}</span>
+        <span class="message-time" title="${fullTimeStr}">${fullTimeStr}</span>
       </div>
       ${body}`;
     row.appendChild(msgBody);
@@ -451,7 +486,7 @@ function loadMessages(roomId) {
 
   const edits = applyEditsToTimeline(timeline);
   const slice = timeline.slice(-100);
-
+  let lastMsgDate = null;
   slice.forEach((ev, i, arr) => {
     if (ev.getType() !== 'm.room.message') return;
     if (ev.isRedacted?.()) return;
@@ -460,6 +495,12 @@ function loadMessages(roomId) {
 
     const editEv = edits.get(ev.getId());
     const renderEvent = editEv ? makeEditedEvent(ev, editEv) : ev;
+    const evDate = ev.getDate() ? new Date(ev.getDate()) : new Date(parseInt(ev.getTs?.() || 0));
+    if (!evDate.getTime()) return;
+    if (!lastMsgDate || !isSameDay(evDate, lastMsgDate)) {
+      container.appendChild(createDateDivider(evDate));
+      lastMsgDate = evDate;
+    }
     const el = buildMessageEl(renderEvent, i > 0 ? arr[i - 1] : null);
     el.dataset.eventId = ev.getId();
 
@@ -508,7 +549,7 @@ async function loadFullHistory(roomId) {
 function rebuildMessages(timeline) {
   container.innerHTML = '';
   const edits = applyEditsToTimeline(timeline);
-
+  let lastRebuildDate = null;
   timeline.forEach((ev, i, arr) => {
     if (ev.getType() !== 'm.room.message') return;
     if (ev.isRedacted?.()) return;
@@ -517,6 +558,12 @@ function rebuildMessages(timeline) {
 
     const editEv = edits.get(ev.getId());
     const renderEvent = editEv ? makeEditedEvent(ev, editEv) : ev;
+    const evDate = ev.getDate() ? new Date(ev.getDate()) : new Date(parseInt(ev.getTs?.() || 0));
+    if (!evDate.getTime()) return;
+    if (!lastRebuildDate || !isSameDay(evDate, lastRebuildDate)) {
+      container.appendChild(createDateDivider(evDate));
+      lastRebuildDate = evDate;
+    }
     const el = buildMessageEl(renderEvent, i > 0 ? arr[i - 1] : null);
     el.dataset.eventId = ev.getId();
 
@@ -560,15 +607,23 @@ async function loadOlderMessages(roomId) {
     if (startIdx === -1) startIdx = 0;
 
     const older = timeline.slice(Math.max(0, startIdx - 50), startIdx);
-    [...older].reverse().forEach((ev, i, arr) => {
+    const olderEls = [];
+    let olderLastDate = null;
+    older.forEach((ev, i, arr) => {
       if (ev.getType() !== 'm.room.message') return;
       if (ev.isRedacted?.()) return;
       const rel = ev.getContent()['m.relates_to'];
       if (rel?.rel_type === 'm.replace') return;
 
-      const prevEv = i < arr.length - 1 ? arr[i + 1] : null;
+      const prevEv = i > 0 ? arr[i - 1] : null;
       const editEv = edits.get(ev.getId());
       const renderEvent = editEv ? makeEditedEvent(ev, editEv) : ev;
+      const evDate = ev.getDate() ? new Date(ev.getDate()) : new Date(parseInt(ev.getTs?.() || 0));
+      if (!evDate.getTime()) return;
+      if (!olderLastDate || !isSameDay(evDate, olderLastDate)) {
+        olderEls.push(createDateDivider(evDate));
+        olderLastDate = evDate;
+      }
       const el = buildMessageEl(renderEvent, prevEv);
       el.dataset.eventId = ev.getId();
 
@@ -579,8 +634,19 @@ async function loadOlderMessages(roomId) {
         el.querySelector('.message-content')?.appendChild(tag);
       }
 
-      container.prepend(el);
+      olderEls.push(el);
     });
+    const firstChild = container.firstElementChild;
+    if (firstChild?.classList.contains('date-divider')) {
+    const firstMsgEl = container.querySelector('.message');
+    const firstMsgDate = firstMsgEl ? new Date(parseInt(firstMsgEl.dataset.timestamp)) : null;
+    const lastOlderEl = olderEls.filter(el => el.classList?.contains('date-divider')).pop();
+    const lastOlderDate = lastOlderEl ? new Date(parseInt(lastOlderEl.dataset.date)) : null;
+    if (lastOlderDate && firstMsgDate && isSameDay(lastOlderDate, firstMsgDate)) {
+    firstChild.remove();
+  }
+}
+    olderEls.reverse().forEach(el => container.prepend(el));
 
     container.scrollTop = container.scrollHeight - prevHeight;
     state.canLoadMore = result !== 0;
@@ -653,6 +719,13 @@ function handleIncoming(event, room, toStart) {
 
   if (event.getSender() === state.client.getUserId()) {
     container.querySelectorAll('[data-temp-id]').forEach(el => el.remove());
+  }
+
+  const lastMsg = [...container.querySelectorAll('.message')].pop();
+  const lastMsgTs = lastMsg ? parseInt(lastMsg.dataset.timestamp) : 0;
+  const newMsgDate = event.getDate() ? new Date(event.getDate()) : new Date();
+  if (!lastMsgTs || !isSameDay(newMsgDate, new Date(lastMsgTs))) {
+    container.appendChild(createDateDivider(newMsgDate));
   }
 
   const el = buildMessageEl(event);

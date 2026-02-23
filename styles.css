@@ -459,3 +459,28 @@ body {
    ============================================================ */
 @media (max-width: 1000px) { .members-sidebar { width: 200px; } .sidebar { width: 200px; } }
 @media (max-width: 800px) { .members-sidebar { display: none !important; } }
+/* ── Date Dividers ─────────────────────────────────────── */
+.date-divider {
+  display: flex;
+  align-items: center;
+  margin: 4px 16px -8px;
+  gap: 12px;
+  user-select: none;
+}
+
+.date-divider::before,
+.date-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-primary);
+}
+
+.date-divider-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap;
+  padding: 0 4px;
+  letter-spacing: 0.04em;
+}
