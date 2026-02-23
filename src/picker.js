@@ -240,12 +240,27 @@ function showReactionPicker(anchorBtn, eventId) {
   }
   closeAllPickers();
 
-  const picker = createEmojiPicker((emoji) => {
+  const picker = createEmojiPicker(async (emoji) => {
     picker.remove();
     if (!state.roomId || !state.client) return;
-    state.client.sendEvent(state.roomId, 'm.reaction', {
-      'm.relates_to': { rel_type: 'm.annotation', event_id: eventId, key: emoji }
-    }).catch(err => console.error('Reaction error:', err));
+    const room = state.client.getRoom(state.roomId);
+    const myId = state.client.getUserId();
+    const alreadyReacted = room?.timeline.some(ev => {
+      if (ev.getType() !== 'm.reaction') return false;
+      const rel = ev.getContent()['m.relates_to'];
+      return rel?.rel_type === 'm.annotation' && rel.event_id === eventId && rel.key === emoji && ev.getSender() === myId;
+    });
+    if (alreadyReacted) return;
+    try {
+      const hs = state.client.getHomeserverUrl();
+      const token = state.client.getAccessToken();
+      const txnId = `rx${Date.now()}${Math.random().toString(36).slice(2)}`;
+      await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/send/m.reaction/${txnId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 'm.relates_to': { rel_type: 'm.annotation', event_id: eventId, key: emoji } }),
+      });
+    } catch (err) { console.error('Reaction error:', err); }
   });
   picker.id = 'reaction-emoji-picker';
   positionPicker(picker, anchorBtn);

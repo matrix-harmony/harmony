@@ -63,7 +63,10 @@ messageForm.addEventListener('submit', async e => {
   const text = messageInput.value.trim();
   if (!text || !state.roomId) return;
 
+  const msg = buildBody(text);
+
   messageInput.value = '';
+  messageInput.style.height = 'auto';
 
   const tempId = `temp-${Date.now()}`;
   const fakeEvent = {
@@ -81,13 +84,19 @@ messageForm.addEventListener('submit', async e => {
   scrollToBottom();
 
   try {
-    const msg = buildBody(text);
-    await state.client.sendMessage(state.roomId, msg);
-    messageInput.value = '';
-    messageInput.style.height = 'auto';
+    const hs = state.client.getHomeserverUrl();
+    const token = state.client.getAccessToken();
+    const txnId = `m${Date.now()}${Math.random().toString(36).slice(2)}`;
+    const res = await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/send/m.room.message/${txnId}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(msg),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     messagesContainer.querySelector(`[data-temp-id="${tempId}"]`)?.remove();
     clearMentions();
-  } catch {
+  } catch (err) {
+    console.error('Send failed:', err);
     clearMentions();
     const el = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
     if (!el) return;
@@ -96,10 +105,25 @@ messageForm.addEventListener('submit', async e => {
     const retry = document.createElement('button');
     retry.textContent = 'Retry';
     retry.className = 'retry-btn';
-    retry.onclick = () => {
-      el.remove();
-      messageInput.value = text;
-      messageForm.dispatchEvent(new Event('submit'));
+    retry.onclick = async () => {
+      retry.disabled = true;
+      retry.textContent = 'Retrying...';
+      try {
+        const hs2 = state.client.getHomeserverUrl();
+        const token2 = state.client.getAccessToken();
+        const txnId2 = `m${Date.now()}${Math.random().toString(36).slice(2)}`;
+        const res2 = await fetch(`${hs2}/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/send/m.room.message/${txnId2}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token2}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg),
+        });
+        if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
+        el.remove();
+      } catch (err2) {
+        console.error('Retry failed:', err2);
+        retry.disabled = false;
+        retry.textContent = 'Retry';
+      }
     };
     el.appendChild(retry);
   }
@@ -129,11 +153,13 @@ fileInput.addEventListener('change', async e => {
       type: file.type,
       onlyContentUri: false,
     });
-    await state.client.sendMessage(state.roomId, {
-      msgtype: 'm.image',
-      body: file.name,
-      url: res.content_uri,
-      info: { mimetype: file.type, size: file.size },
+    const hs = state.client.getHomeserverUrl();
+    const token = state.client.getAccessToken();
+    const txnId = `img${Date.now()}${Math.random().toString(36).slice(2)}`;
+    await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/send/m.room.message/${txnId}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msgtype: 'm.image', body: file.name, url: res.content_uri, info: { mimetype: file.type, size: file.size } }),
     });
   } catch (err) {
     alert('Upload failed: ' + err.message);

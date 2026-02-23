@@ -12,6 +12,7 @@ function buildClient(credentials) {
     baseUrl: credentials.baseUrl || credentials.homeserver,
     accessToken: credentials.accessToken || credentials.token,
     userId: credentials.userId,
+    pendingEventOrdering: 'chronological',
   });
 }
 

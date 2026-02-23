@@ -6,6 +6,46 @@ const path = require('path');
 
 const container = document.getElementById('messages-container');
 
+async function matrixSend(roomId, content) {
+  const hs = state.client.getHomeserverUrl();
+  const token = state.client.getAccessToken();
+  const txnId = `m${Date.now()}${Math.random().toString(36).slice(2)}`;
+  const res = await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(content),
+  });
+  if (!res.ok) throw new Error(`Send failed: ${res.status}`);
+  return await res.json();
+}
+
+async function matrixRedact(roomId, eventId) {
+  const hs = state.client.getHomeserverUrl();
+  const token = state.client.getAccessToken();
+  const txnId = `r${Date.now()}${Math.random().toString(36).slice(2)}`;
+  const res = await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/redact/${encodeURIComponent(eventId)}/${txnId}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`Redact failed: ${res.status}`);
+  return await res.json();
+}
+
+async function matrixReact(roomId, eventId, emoji) {
+  const hs = state.client.getHomeserverUrl();
+  const token = state.client.getAccessToken();
+  const txnId = `rx${Date.now()}${Math.random().toString(36).slice(2)}`;
+  const res = await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.reaction/${txnId}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'm.relates_to': { rel_type: 'm.annotation', event_id: eventId, key: emoji } }),
+  });
+  if (!res.ok) throw new Error(`React failed: ${res.status}`);
+  return await res.json();
+}
+
+
 const TWEMOJI_OPTS = {};
 
 const ALLOWED_TAGS = new Set(['a', 'b', 'i', 'em', 'strong', 'code', 'pre', 'br', 'del', 'u', 'blockquote', 'span', 'p', 'ul', 'ol', 'li', 'h1', 'h2', 'h3']);
@@ -275,7 +315,7 @@ function startReply(event, room) {
   const sender = event.getSender();
   const member = room.getMember(sender);
   const name = (() => {
-    const raw = member?.name || sender.split(':')[0].slice(1);
+    const raw = member?.name || getSenderName(sender) || sender.split(':')[0].slice(1);
     const i = raw.indexOf('(');
     return i > 0 ? raw.slice(0, i).trim() : raw;
   })();
@@ -362,18 +402,30 @@ function cancelEdit() {
 }
 
 async function saveEdit(newText, event) {
-  const original = event.getContent().body || '';
-  if (!newText.trim() || newText.trim() === original.trim()) {
+  const msgEl = container.querySelector(`[data-event-id="${event.getId()}"]`);
+  const displayedOriginal = msgEl?.dataset.body || event.getContent().body || '';
+  if (!newText.trim() || newText.trim() === displayedOriginal.trim()) {
     cancelEdit();
     return;
   }
   const { applyMarkdown } = require('./mentions');
   const formatted = applyMarkdown(newText);
-  await state.client.sendMessage(state.roomId, {
-    'm.new_content': { msgtype: 'm.text', body: newText, format: 'org.matrix.custom.html', formatted_body: formatted },
-    'm.relates_to': { rel_type: 'm.replace', event_id: event.getId() },
+  const existingRelation = event.getContent()['m.relates_to'];
+  const replyRelation = existingRelation?.['m.in_reply_to']
+    ? { 'm.in_reply_to': existingRelation['m.in_reply_to'] }
+    : undefined;
+  const newContent = {
     msgtype: 'm.text',
     body: newText,
+    format: 'org.matrix.custom.html',
+    formatted_body: formatted,
+    ...(replyRelation ? { 'm.relates_to': replyRelation } : {}),
+  };
+  await matrixSend(state.roomId, {
+    'm.new_content': newContent,
+    'm.relates_to': { rel_type: 'm.replace', event_id: event.getId() },
+    msgtype: 'm.text',
+    body: `* ${newText}`,
   });
   cancelEdit();
 }
@@ -402,6 +454,7 @@ function loadMessages(roomId) {
 
   slice.forEach((ev, i, arr) => {
     if (ev.getType() !== 'm.room.message') return;
+    if (ev.isRedacted?.()) return;
     const rel = ev.getContent()['m.relates_to'];
     if (rel?.rel_type === 'm.replace') return;
 
@@ -458,6 +511,7 @@ function rebuildMessages(timeline) {
 
   timeline.forEach((ev, i, arr) => {
     if (ev.getType() !== 'm.room.message') return;
+    if (ev.isRedacted?.()) return;
     const rel = ev.getContent()['m.relates_to'];
     if (rel?.rel_type === 'm.replace') return;
 
@@ -508,6 +562,7 @@ async function loadOlderMessages(roomId) {
     const older = timeline.slice(Math.max(0, startIdx - 50), startIdx);
     [...older].reverse().forEach((ev, i, arr) => {
       if (ev.getType() !== 'm.room.message') return;
+      if (ev.isRedacted?.()) return;
       const rel = ev.getContent()['m.relates_to'];
       if (rel?.rel_type === 'm.replace') return;
 
@@ -574,19 +629,24 @@ function handleIncoming(event, room, toStart) {
       const origEv = timeline[origIdx];
       const prevEvent = origIdx > 0 ? timeline[origIdx - 1] : null;
 
-      if (origEv) {
-        const renderEvent = makeEditedEvent(origEv, event);
-        const newEl = buildMessageEl(renderEvent, prevEvent);
-        newEl.dataset.eventId = originalId;
-        newEl.dataset.senderId = origEv.getSender();
-        newEl.dataset.timestamp = original.dataset.timestamp;
+      const baseEvent = origEv || {
+        getSender: () => original.dataset.senderId,
+        getContent: () => ({ msgtype: 'm.text', body: original.dataset.body || '' }),
+        getDate: () => new Date(parseInt(original.dataset.timestamp || Date.now())),
+        getType: () => 'm.room.message',
+        getId: () => originalId,
+      };
+      const renderEvent = makeEditedEvent(baseEvent, event);
+      const newEl = buildMessageEl(renderEvent, prevEvent);
+      newEl.dataset.eventId = originalId;
+      newEl.dataset.senderId = baseEvent.getSender();
+      newEl.dataset.timestamp = original.dataset.timestamp;
 
-        const editedTag = document.createElement('span');
-        editedTag.className = 'message-edited';
-        editedTag.textContent = '(edited)';
-        newEl.querySelector('.message-content')?.appendChild(editedTag);
-        original.replaceWith(newEl);
-      }
+      const editedTag = document.createElement('span');
+      editedTag.className = 'message-edited';
+      editedTag.textContent = '(edited)';
+      newEl.querySelector('.message-content')?.appendChild(editedTag);
+      original.replaceWith(newEl);
     }
     return;
   }
@@ -596,6 +656,7 @@ function handleIncoming(event, room, toStart) {
   }
 
   const el = buildMessageEl(event);
+  el.dataset.senderId = event.getSender();
   el.dataset.eventId = event.getId();
   container.appendChild(el);
   scrollToBottom();
@@ -608,39 +669,34 @@ document.addEventListener('click', async e => {
     const msg = btn.closest('.message');
     const eventId = msg?.dataset.eventId;
     const room = state.client.getRoom(state.roomId);
-    const event = room?.timeline.find(ev => ev.getId() === eventId) ||
+    const timelineEvent = room?.timeline.find(ev => ev.getId() === eventId) ||
                   room?.timeline.find(ev => {
                     const rel = ev.getContent()['m.relates_to'];
                     return rel?.rel_type === 'm.replace' && rel.event_id === eventId;
                   });
-    if (!event && action !== 'delete') return;
+    const event = timelineEvent || {
+      getSender: () => msg.dataset.senderId,
+      getContent: () => ({ msgtype: 'm.text', body: msg.dataset.body || '', 'm.relates_to': undefined }),
+      getDate: () => new Date(parseInt(msg.dataset.timestamp || Date.now())),
+      getType: () => 'm.room.message',
+      getId: () => eventId,
+    };
 
     if (action === 'react') {
-  const { showReactionPicker } = require('./picker');
-  showReactionPicker(btn, eventId);
-} else if (action === 'reply')
-
-    if (action === 'reply') {
-      const fakeEvent = {
-        getSender: () => msg.dataset.senderId,
-        getContent: () => ({ msgtype: 'm.text', body: msg.dataset.body || '' }),
-        getDate: () => new Date(parseInt(msg.dataset.timestamp)),
-        getType: () => 'm.room.message',
-        getId: () => eventId,
-      };
-      startReply(fakeEvent, room);
+      const { showReactionPicker } = require('./picker');
+      showReactionPicker(btn, eventId);
+    } else if (action === 'reply') {
+      startReply(event, room);
     } else if (action === 'edit') {
-      const baseEvent = room?.timeline.find(ev => ev.getId() === eventId);
-      if (baseEvent) startEdit(baseEvent, msg);
+      startEdit(event, msg);
     } else if (action === 'pin') {
       const pinned = room.currentState.getStateEvents('m.room.pinned_events', '')?.getContent()?.pinned || [];
       if (!pinned.includes(eventId)) {
         state.client.sendStateEvent(state.roomId, 'm.room.pinned_events', { pinned: [...pinned, eventId] }, '');
       }
     } else if (action === 'delete') {
-      await state.client.sendEvent(state.roomId, 'm.room.redaction', {
-        redacts: eventId,
-      }, eventId);
+      msg.remove();
+      try { await matrixRedact(state.roomId, eventId); } catch (err) { console.error('Delete error:', err); }
     }
     return;
   }
@@ -762,39 +818,33 @@ function renderReactions(el, reactions) {
           countEl.textContent = newCount;
         }
         try {
-          await state.client.sendEvent(state.roomId, 'm.room.redaction', { redacts: currentMyReactionId }, currentMyReactionId);
+          await matrixRedact(state.roomId, currentMyReactionId);
         } catch (err) {
           console.error('Unreact error:', err);
+          const room2 = state.client.getRoom(state.roomId);
+          if (room2) {
+            const reactions = getReactionsForEvent(room2.timeline, targetEventId);
+            const msgEl2 = container.querySelector(`[data-event-id="${targetEventId}"]`);
+            if (msgEl2) renderReactions(msgEl2, reactions);
+          }
         } finally {
           pendingRedactions.delete(currentMyReactionId);
           pendingReactions.delete(reactionKey);
         }
       } else {
-        const room = state.client.getRoom(state.roomId);
-        const alreadyReacted = room?.timeline.some(ev => {
-          if (ev.getType() !== 'm.reaction') return false;
-          const rel = ev.getContent()['m.relates_to'];
-          return rel?.rel_type === 'm.annotation' &&
-            rel.event_id === targetEventId &&
-            rel.key === key &&
-            ev.getSender() === state.client.getUserId();
-        });
-
-        if (alreadyReacted) {
-          pendingReactions.delete(reactionKey);
-          return;
-        }
-
         try {
-          await state.client.sendEvent(state.roomId, 'm.reaction', {
-            'm.relates_to': {
-              rel_type: 'm.annotation',
-              event_id: targetEventId,
-              key: key,
-            }
+          const hs = state.client.getHomeserverUrl();
+          const token = state.client.getAccessToken();
+          const txnId = `rx${Date.now()}${Math.random().toString(36).slice(2)}`;
+          const res = await fetch(`${hs}/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/send/m.reaction/${txnId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 'm.relates_to': { rel_type: 'm.annotation', event_id: targetEventId, key: key } }),
           });
+          if (!res.ok) throw new Error(`React failed: ${res.status}`);
         } catch (err) {
           console.error('Reaction error:', err);
+        } finally {
           pendingReactions.delete(reactionKey);
         }
       }
