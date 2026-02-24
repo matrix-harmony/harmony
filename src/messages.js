@@ -595,7 +595,6 @@ async function loadOlderMessages(roomId) {
   state.loadingHistory = true;
 
   const room = state.client.getRoom(roomId);
-  const prevHeight = container.scrollHeight;
 
   try {
     const result = await state.client.scrollback(room, 50);
@@ -646,9 +645,9 @@ async function loadOlderMessages(roomId) {
     firstChild.remove();
   }
 }
-    olderEls.reverse().forEach(el => container.prepend(el));
-
-    container.scrollTop = container.scrollHeight - prevHeight;
+    const fragment = document.createDocumentFragment();
+    olderEls.reverse().forEach(el => fragment.appendChild(el));
+    container.prepend(fragment);
     state.canLoadMore = result !== 0;
   } catch {
     state.canLoadMore = false;
