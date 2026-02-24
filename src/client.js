@@ -5,9 +5,10 @@ const { logout } = require('./auth');
 const { loadHomeView, loadSpaces, showHomeNav, handleNewRoom } = require('./rooms');
 const { handleIncoming } = require('./messages');
 const { initPickers } = require('./picker');
+const { init: initTyping } = require('./typing');
+const { init: initReceipts } = require('./receipts');
 
 function buildClient(credentials) {
-
   return sdk.createClient({
     baseUrl: credentials.baseUrl || credentials.homeserver,
     accessToken: credentials.accessToken || credentials.token,
@@ -37,7 +38,6 @@ async function startClient(credentials) {
       if (url) {
         const avatarEl = document.getElementById('user-avatar');
         avatarEl.innerHTML = `<img src="${url}" onerror="this.parentElement.textContent='${shortName[0].toUpperCase()}'">`;
-
       }
     }
 
@@ -45,6 +45,8 @@ async function startClient(credentials) {
     showHomeNav(true);
     loadHomeView();
     initPickers();
+    initTyping();
+    initReceipts();
 
     document.getElementById('messages-container').innerHTML =
       '<div class="empty-state"><p>Select a room to start messaging</p></div>';
@@ -60,8 +62,8 @@ async function startClient(credentials) {
 
   state.client.on('Room.timeline', handleIncoming);
   state.client.on('Room', handleNewRoom);
-  
-  await state.client.startClient({ 
+
+  await state.client.startClient({
     initialSyncLimit: 100,
     lazyLoadMembers: true,
   });
